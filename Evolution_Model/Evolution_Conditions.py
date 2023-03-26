@@ -40,7 +40,7 @@ def monte_carlo_sequential(nodes_info, sample=False, time_interval=12, T = 365 *
             else:
                 delta = random.random()
                 t_f = -np.log(delta) / lam
-                print('fail_rate_time {}'.format(t_f))
+                # print('fail_rate_time {}'.format(t_f))
 
                 t_r = -np.log(delta) / miu  # 修复时长为2h，不同的采样需要设置不同的随机数
                 # print('构件修复时长为{}'.format(t_r))

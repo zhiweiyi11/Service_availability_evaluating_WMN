@@ -13,14 +13,25 @@ import copy
 import time
 import os
 
+from multiprocessing import  cpu_count
+
+import pandas as pd
+
 from Evolution_Model.Evolution_Objects import *
 from Evolution_Model.Evolution_Conditions import *
 from Evolution_Model.Evolution_Rules import *
 from Evolution_Model.Application_request_generating import *
 
+from multiprocessing.pool import ThreadPool as Pool
+
+def test_func(x):
+    res = x*x
+    return res
+
 def single_availability(App_set, Switch_time, Survival_time, T):
     # 计算单次网络演化时的业务可用度(仅考虑中断时长)
     Apps_avail = {}  # 业务单次演化的可用度
+    Apps_loss = {}
 
     for app_id, app_val in App_set.items():
 
@@ -37,13 +48,13 @@ def single_availability(App_set, Switch_time, Survival_time, T):
         app_unavail = sw_t + rp_t * 3600
         app_loss = (app_unavail * app_val.demand) / 3600 # 每小时的期望服务负载损失
         app_avail = 1 - app_unavail/(3600*T) # 在T时间间隔内的平均服务可用度
-        Apps_avail[app_id] = [app_avail,app_loss]
+        Apps_avail[app_id] = app_avail #
+        Apps_loss[app_id] = app_loss
         # 测试业务可用度
         # if app_avail < 0.99 :
         #     print('业务的id为{}，业务的故障时间为{}'.format(Apps[app_id].id, Apps[app_id].outage ))
 
-    return Apps_avail
-
+    return Apps_avail, Apps_loss
 
 def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time):
     # 生成网络演化对象和演化条件，调用演化规则，来模拟网络的演化过程(Sub_service为服务部署的节点集合)
@@ -56,11 +67,12 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR, switch_time, switch
     # 2: 生成网络的演化条件
     evo_conditions = cond_func(G_tmp, MTTF, MLife, MTTR, T)  # 各链路的MTTF、MTTR具体值在函数中根据对应的分布进行修改
     time_list = evo_conditions.index.tolist()  # 网络发生演化的时刻
-    # print('生成的演化态数量为{}'.format(len(time_list)))
+    print('生成的演化态数量为{}'.format(len(time_list)))
 
     # 3: 触发网络的演化规则
     App_interupt = [] # 发生中断的业务集合
     for i in range(len(time_list)):
+        # print('当前为第{}次演化'.format(i))
         evo_time = time_list[i]
         App_fail = []  # 当前演化时刻下故障的业务集合
         nodes_fail = evo_conditions.iloc[i]['fail']
@@ -132,6 +144,39 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR, switch_time, switch
 
     return onetime_availability
 
+
+
+def Apps_availability_func(N, args, pool_num):
+    '''
+    # 计算业务可用度的主函数(调用多进程并行计算)
+    :param N:  网络演化的次数
+    :param args:  网络演化模型的参数
+    :param pool_num:  开启进程池的数量
+    :return multi_avail: 各业务可用度的结果
+    '''
+    multi_avail = pd.DataFrame(index=list(args[2].keys())) # 存储N次演化下各次的业务可用度结果
+    multi_loss = pd.DataFrame(index=list(args[2].keys())) # 存储N次演化下各次业务的带宽损失结果
+
+    print('CPU内核数为{}'.format(cpu_count()))
+    print('当前母进程为{}'.format(os.getpid()))
+    pool = Pool(pool_num)  # 开启pool_num个进程, 需要小于本地CPU的个数
+
+    for n in range(N):
+        # t1 = time.time()
+        # functions are only picklable if they are defined at the top-level of a module.(函数尽可以被调用当其位于模块中的顶层)
+        res = pool.apply_async(func=calculateAvailability, args=args)  # 使用多个进程池异步进行计算，apply_async执行函数,当有一个进程执行完毕后，会添加一个新的进程到pool中
+        multi_avail.loc[:,n+1] = pd.Series(res.get()[0]) # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
+        multi_loss.loc[:, n+1] = pd.Series(res.get()[1])
+
+        # t2 = time.time()
+        # print('------------------分隔线---------------当前完成第{}次演化，耗时{}min'.format(n, (t2-t1)/60))
+
+    pool.close()
+    pool.join()  # #调用join之前，一定要先调用close() 函数，否则会出错, close()执行后不会有新的进程加入到pool,join函数等待素有子进程结束
+
+    return multi_avail, multi_loss
+
+
 def save_results(origin_df, file_name):
     # 保存仿真的数据
     # 将dataframe中的数据保存至excel中
@@ -148,8 +193,7 @@ if __name__ == '__main__':
     # 网络演化对象的输入参数；
     ## 网络层对象
     Topology = 'Random'
-    Cap = 20
-    Node_num, App_num = 100, 100
+    Node_num, App_num = 100, 50
     Capacity = 50
     Demand = np.random.normal(loc=10, scale=2, size=App_num)  # 生成平均值为5，标准差为1的带宽的正态分布
     Area_width , Area_length = 250, 150
@@ -174,17 +218,22 @@ if __name__ == '__main__':
     MTTR = 2
 
     ## 重路由相关的参数
-    switch_time = 1
+    switch_time = 10
     switch_rate = 0.99
-    survival_time = 0 # 允许的最大重路由次数为5次
+    survival_time = 3*switch_time # 允许的最大重路由次数为5次
 
     # 初始化网络演化对象
+    start_time = time.time()
     G, App = init_func(Area_size, Node_num, Topology, TX_range, CV_range, Coordinates, Capacity, grid_size,  App_num, traffic_th, Demand, Priority, Strategy)
     # 生成网络演化条件
-    AppAvailability_results = calculateAvailability(T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
-    total = 0
-    for a in AppAvailability_results:
-        total += AppAvailability_results[a][1]
-    average = total/len(AppAvailability_results)
-    print('整网业务可用性的平均值为{}'.format(average))
+    # AppAvailability_results = calculateAvailability(T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
+    end_time = time.time()
+    print('\n 单次网络演化的时长为{}s'.format(end_time-start_time))
+
+    N = 3
+    pool_num = 4
+    args = [T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time]
+    Availability_Results = Apps_availability_func(N, args, pool_num)
+
+
 
