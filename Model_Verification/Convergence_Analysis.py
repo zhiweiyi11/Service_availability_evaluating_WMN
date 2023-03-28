@@ -58,7 +58,7 @@ def save_results(origin_df, file_name):
 	time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')  # 记录数据存储的时间
 	sys_path = os.path.abspath('..')  # 表示当前所处文件夹上一级文件夹的绝对路径
 
-	with pd.ExcelWriter(sys_path + r'.\Results_saved\{}_time{}.xlsx'.format(file_name, time2)) as xlsx:  # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。
+	with pd.ExcelWriter(sys_path + r'.\Results_saving\{}_time{}.xlsx'.format(file_name, time2)) as xlsx:  # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。
 		origin_df.to_excel(xlsx, sheet_name='app_avail', index=False)  # 不显示行索引
 		print('数据成功保存')
 
@@ -106,4 +106,35 @@ if __name__ == '__main__':
 
 	Con_Results = convergence_analysis(N, T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
 
+	# 绘制收敛性分析的结果图
+	font = {'family': 'serif',
+			'color': 'darkred',
+			'weight': 'normal',
+			'size': 16,
+			}
+	## 服务可用度的方差系数
+	x = Con_Results[0].columns # df的列索引，表示仿真次数N
+	fig1, ax1 = plt.subplots() # Create a figure and a set of subplots.
+	for i in range(5):
+		y = Con_Results[0].iloc[i]
+		ax1.plot(x, y, label='$s_{}$'.format(i))
+	# plt.title('Loss of Service Exception (LOSE)', fontdict=font)
+	plt.xlabel('simulation times ($N$)', fontdict=font)
+	plt.ylabel('Coefficient of variation', fontdict=font)
+	plt.legend(loc='upper right')
 
+	# Tweak spacing to prevent clipping of ylabel 调整间距以防止剪裁ylabel
+	plt.subplots_adjust(left=0.15)
+	plt.show()
+
+	## 服务带宽损失
+
+	fig, ax = plt.subplots() # Create a figure and a set of subplots.
+	for i in range(5):
+		y = Con_Results[1].iloc[i]
+		ax.plot(x, y, label='$s_{}$'.format(i))
+	# plt.title('Loss of Service Exception (LOSE)', fontdict=font)
+	plt.xlabel('simulation times ($N$)', fontdict=font)
+	plt.ylabel('Loss of service exception (Mbps/hr)', fontdict=font)
+	plt.legend()
+	plt.show()

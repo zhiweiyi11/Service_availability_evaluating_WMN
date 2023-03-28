@@ -95,7 +95,7 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR, switch_time, switch
             # action2: 对业务进行路径计算
                 app = App_tmp[app_id]
                 app_path = app.path
-                new_app_path, reroute_times = path_reroute(G_tmp, app.access, app.exit, app_path, app.demand, app.fail_time, [], routing_th)
+                new_app_path, reroute_times = path_reroute(G_tmp, app.access, app.exit, app_path, app.demand, app.str, [], routing_th)
             # action3: 对业务进行重新部署
                 if new_app_path:  # 如果业务的新路径不为空
                     app.path = new_app_path
@@ -128,7 +128,7 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR, switch_time, switch
                 app.app_undeploy_node(G_tmp)  # 释放业务之前的路径映射
                 app_path = app.path
                 # 区别在重路由计算的输入参数不一样
-                new_app_path, reroute_times = path_reroute(G_tmp, app.access, app.exit, app_path, app.demand, app.fail_time, nodes_fail, routing_th)
+                new_app_path, reroute_times = path_reroute(G_tmp, app.access, app.exit, app_path, app.demand, app.str, nodes_fail, routing_th)
             # action3: 对业务进行重新部署
                 rand_seed = random.random() # 生成随机数来作为路径倒换的判断
                 if new_app_path and rand_seed <= switch_rate:  # 如果业务的新路径不为空
@@ -207,9 +207,9 @@ if __name__ == '__main__':
     grid_size = 5
     traffic_th = 0.5
     Priority = np.linspace(start=1, stop=5, num=5, dtype=int)
-    ratio_str = 1  # 尽量分离和尽量重用的业务占比
-    Strategy_P = ['Repetition'] * int(App_num * (1 - ratio_str))
-    Strategy_S = ['Separate'] * int(App_num * ratio_str)
+    ratio_str = 0.5  # 尽量分离和尽量重用的业务占比
+    Strategy_P = ['Global'] * int(App_num * (1 - ratio_str))
+    Strategy_S = ['Local'] * int(App_num * ratio_str)
     Strategy = Strategy_S + Strategy_P
 
     # 演化条件的参数
@@ -230,6 +230,7 @@ if __name__ == '__main__':
     end_time = time.time()
     print('\n 单次网络演化的时长为{}s'.format(end_time-start_time))
 
+    # 测试多进程运行结果是否正确
     N = 3
     pool_num = 4
     args = [T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time]

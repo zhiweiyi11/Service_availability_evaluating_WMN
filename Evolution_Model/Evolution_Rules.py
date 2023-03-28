@@ -22,7 +22,7 @@ def k_shortest_paths(k, G, source, target,  weight=None):
     return list(islice(nx.shortest_simple_paths(G, source, target, weight=weight), k))
 
 # 路由规则
-def path_reroute(G, app_access, app_exit, app_path, app_demand, app_failtime, node_fail_list, routing_th):
+def path_reroute(G, app_access, app_exit, app_path, app_demand, app_strategy, node_fail_list, routing_th):
     '''
     # 网络的重路由规则
     :param G: 当前网络的拓扑结构
@@ -38,54 +38,102 @@ def path_reroute(G, app_access, app_exit, app_path, app_demand, app_failtime, no
     source = app_path[0]
     destination = app_path[-1]
 
+    '''业务的重路由分为2种策略：Global和Local'''
+    if app_strategy == 'Global':
+        # 全局重路由策略(从源宿节点重新找一条路)
+        # 1) 先将原始的路径上的链路权重设置为无穷大
+        for i in range(len(app_path)-1):
+            G_sample.adj[app_path[i]][app_path[i+1]]['weight'] = float('inf')
+        # 2) 然后在业务的接入和接出节点集合中寻找一条满足业务带宽需求的路径
+        for node in node_fail_list:
+            fail_node_index = app_path.index(node)
+            app_access_tmp = copy.deepcopy(app_access)
+            app_exit_tmp = copy.deepcopy(app_exit)
+            ## 确定业务重路由的源宿节点
+            if fail_node_index == 0:  # 如果故障的节点是链路的首节点或尾节点
+                # 根据节点的状态来重新选择业务的源节点
+                if len(app_access_tmp) > 1:  # 如果业务有其余可以接入的节点list
+                    available_access_list = []  # 存储可接入节点的list
+                    for n in app_access:
+                        if G_sample.nodes[n]['alive'] == 1:
+                            available_access_list.append(n)
+                        else:
+                            app_access_tmp.remove(n)
+                    if available_access_list:  # 如果存在可接入的节点list
+                        source = random.choice(available_access_list)
+                    else:  # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
+                        return new_app_path, reroute_times
+                else:
+                    return new_app_path, reroute_times
+
+            elif fail_node_index == len(app_path) - 1:
+                if len(app_exit_tmp) > 1:
+                    available_exit_list = []
+                    for n in app_exit:
+                        if G_sample.nodes[n]['alive'] == 1:
+                            available_exit_list.append(n)
+                        else:
+                            app_exit_tmp.remove(n)
+                    if available_exit_list:  # 如果存在可接入的节点list
+                        source = random.choice(available_exit_list)
+                    else:  # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
+                        return new_app_path, reroute_times
+
+                else:
+                    return new_app_path, reroute_times
+            else: # 如果故障的节点为业务的中继节点，则直接从其源宿节点list中随机选择一个进行重路由
+                source = random.choice(app_access_tmp)
+                destination = random.choice(app_exit_tmp)
+
+    '''业务的Local重路由策略'''
+    if app_strategy == 'Local':
     # 找出节点故障导致的业务原路径中故障的链路
-    for node in node_fail_list:
-        fail_node_index = app_path.index(node)
-        app_access_tmp = copy.deepcopy(app_access)
-        app_exit_tmp = copy.deepcopy(app_exit)
-        ## 确定业务重路由的源宿节点
-        if fail_node_index == 0 : # 如果故障的节点是链路的首节点或尾节点
-            # 根据节点的状态来重新选择业务的源节点
-            if len(app_access_tmp) > 1: # 如果业务有其余可以接入的节点list
-                available_access_list = [] # 存储可接入节点的list
-                for n in app_access:
-                    if G_sample.nodes[n]['alive'] == 1:
-                        available_access_list.append(n)
-                    else:
-                        app_access_tmp.remove(n)
-                if available_access_list: # 如果存在可接入的节点list
-                    source = random.choice(available_access_list)
-                else: # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
-                    return new_app_path, reroute_times
-            else:
-                return new_app_path, reroute_times
-
-        elif fail_node_index == len(app_path)-1:
-            # fail_link = (app_path[fail_node_index-1], node)
-            # link_fail_list.append(fail_link)
-            # 重新选择业务的宿节点
-            if len(app_exit_tmp)>1:
-                available_exit_list = []
-                for n in app_exit:
-                    if G_sample.nodes[n]['alive'] == 1:
-                        available_exit_list.append(n)
-                    else:
-                        app_exit_tmp.remove(n)
-                if available_exit_list:  # 如果存在可接入的节点list
-                    source = random.choice(available_exit_list)
-                else:  # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
+        for node in node_fail_list:
+            fail_node_index = app_path.index(node)
+            app_access_tmp = copy.deepcopy(app_access)
+            app_exit_tmp = copy.deepcopy(app_exit)
+            ## 确定业务重路由的源宿节点
+            if fail_node_index == 0 : # 如果故障的节点是链路的首节点或尾节点
+                # 根据节点的状态来重新选择业务的源节点
+                if len(app_access_tmp) > 1: # 如果业务有其余可以接入的节点list
+                    available_access_list = [] # 存储可接入节点的list
+                    for n in app_access:
+                        if G_sample.nodes[n]['alive'] == 1:
+                            available_access_list.append(n)
+                        else:
+                            app_access_tmp.remove(n)
+                    if available_access_list: # 如果存在可接入的节点list
+                        source = random.choice(available_access_list)
+                    else: # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
+                        return new_app_path, reroute_times
+                else:
                     return new_app_path, reroute_times
 
-            else:
-                return new_app_path, reroute_times
+            elif fail_node_index == len(app_path)-1:
+                # fail_link = (app_path[fail_node_index-1], node)
+                # link_fail_list.append(fail_link)
+                # 重新选择业务的宿节点
+                if len(app_exit_tmp)>1:
+                    available_exit_list = []
+                    for n in app_exit:
+                        if G_sample.nodes[n]['alive'] == 1:
+                            available_exit_list.append(n)
+                        else:
+                            app_exit_tmp.remove(n)
+                    if available_exit_list:  # 如果存在可接入的节点list
+                        source = random.choice(available_exit_list)
+                    else:  # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
+                        return new_app_path, reroute_times
+                else:
+                    return new_app_path, reroute_times
 
 
-        else: # 如果业务的故障模式为中继节点
-            # fail_link_1, fail_link_2 = (node, app_path[fail_node_index+1]), (app_path[fail_node_index-1], node)
-            # link_fail_list.append(fail_link_1)
-            # link_fail_list.append(fail_link_2)
-            source = app_path[fail_node_index - 1]
-            destination = app_path[fail_node_index + 1]
+            else: # 如果业务的故障模式为中继节点
+                # fail_link_1, fail_link_2 = (node, app_path[fail_node_index+1]), (app_path[fail_node_index-1], node)
+                # link_fail_list.append(fail_link_1)
+                # link_fail_list.append(fail_link_2)
+                source = app_path[fail_node_index - 1]
+                destination = app_path[fail_node_index + 1]
 
     ''' 
     根据业务的故障模式(源宿节点故障or中继节点故障)，对业务进行重路由
@@ -184,8 +232,8 @@ if __name__ == '__main__':
     traffic_th = 0.5
     Priority = np.linspace(start=1, stop=5, num=5, dtype=int)
     ratio_str = 1  # 尽量分离和尽量重用的业务占比
-    Strategy_P = ['Almost_Repetition'] * int(App_num * (1 - ratio_str))
-    Strategy_S = ['Almost_Separate'] * int(App_num * ratio_str)
+    Strategy_P = ['Global'] * int(App_num * (1 - ratio_str))
+    Strategy_S = ['Local'] * int(App_num * ratio_str)
     Strategy = Strategy_S + Strategy_P
 
     G, App = init_func(Area_size, Node_num, Topology, TX_range, CV_range, Coordinates, Capacity, grid_size,  App_num, traffic_th, Demand, Priority, Strategy)  # 这样子的测试需要在测试函数中返回输出结果才行
@@ -194,7 +242,7 @@ if __name__ == '__main__':
     app_access = App[15].access
     app_exit = App[15].exit
     app_demand = App[15].demand
-    node_fail_list = [random.choice(app_path)]
+    node_fail_list = [app_path[0]]
 
     for n in node_fail_list:
         G.nodes[n]['alive'] = 0  # 置节点的状态为1，表示存活
@@ -203,4 +251,4 @@ if __name__ == '__main__':
         for adj in adj_nodes:
             G.adj[n][adj]['weight'] = float('inf')
 
-    candi_path, reroute_times = path_reroute(G, app_access, app_exit, app_path, app_demand, 144.5 , node_fail_list, 10)
+    candi_path, reroute_times = path_reroute(G, app_access, app_exit, app_path, app_demand, 'Global' , node_fail_list, 10)

@@ -367,8 +367,8 @@ if __name__ == '__main__':
     Demand = np.random.normal(loc= 5, scale=1, size=App_num) # 生成平均值为5，标准差为1的带宽的整体分布
     Priority = [1]*App_num
     ratio_str = 1 # 尽量分离和尽量重用的业务占比
-    Strategy_P = ['Almost_Repetition'] * int(App_num*(1-ratio_str))
-    Strategy_S = ['Almost_Separate'] * int(App_num*ratio_str)
+    Strategy_P = ['Global'] * int(App_num*(1-ratio_str))
+    Strategy_S = ['Local'] * int(App_num*ratio_str)
     Strategy = Strategy_S + Strategy_P
 
     G, App_dict = init_func(Area_size, Node_num, Topology, TX_range, CV_range, Coordinates, Cap_node, grid_size, App_num, traffic_th, Demand, Priority, Strategy)
