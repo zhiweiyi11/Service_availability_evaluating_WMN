@@ -24,7 +24,6 @@ import PIL # 导入计算机网络的图标
 
 from Evolution_Model.Application_request_generating import *
 
-
 def calculate_distance(node1, node2):
   """Calculate the Euclidean distance between two nodes."""
   x1 = node1[0] # pos_x
@@ -54,6 +53,59 @@ def generate_positions(NB_nodes, Area_width, Area_length):
             print("数据成功保存")
     return sensor_coordinates
 
+def generate_mesh(width, height, unit):
+    """
+    将一个矩形区域划分为更细致的网格
+    :param width: 区域的宽度
+    :param height: 区域的高度
+    :param unit: 网格边长，假设以正方形为最小单位进行划分
+    :return: 节点坐标
+    """
+    x = []
+    y = []
+    res = []
+
+    for i in range(0, width + unit, unit):
+        x.append(i)
+
+    for i in range(0, height + unit, unit):
+        y.append(i)
+
+    for i in range(0, len(x)):
+        for j in range(0, len(y)):
+            temp = []
+            temp.append(x[i])
+            temp.append(y[j])
+            res.append(temp)
+
+    return res
+
+def get_edges_from_mesh(coordinates, unit) -> []:
+    """
+    将mesh中相邻的坐标形成边
+    :param coordinates: mesh坐标集合
+    :param unit: mesh的最小放个边长
+    :return: 具有连边的节点的序号对
+    """
+    edges_list = []
+
+    for i in range(len(coordinates)):
+        for j in range(len(coordinates)):
+            distance = calculate_distance(coordinates[i], coordinates[j])
+            if (distance == unit):
+                edges_list.append((i, j))
+
+    for i in range(len(edges_list)):
+        for j in range(i + 1, len(edges_list)):
+            x_i = edges_list[i][0]
+            y_i = edges_list[i][1]
+            x_j = edges_list[j][0]
+            y_j = edges_list[j][1]
+            if (x_i == y_j and y_i == x_j):
+                del edges_list[j]
+                break
+
+    return edges_list
 
 def cal_link_fail_probability(r, r_th, phi):
     # 计算链路的失效概率
@@ -74,9 +126,32 @@ class Network(nx.Graph): # 表示继承为nx.Graph的子类
         if topology == 'Grid': # 随机部署节点
             # 创建二维网络（mesh）图
             nx.Graph.__init__(self)
-            m = int(np.sqrt(NB_NODES))
-            n = m + 2
-            G = nx.grid_2d_graph(m, n)  # 生成一个m行n列的方格网络
+            G = nx.Graph()
+
+            edges_list = []  # 用于保存相连的（或具有连边的）节点对
+
+            # 如果是从文件中导入节点坐标
+            if import_file == True:
+                sys_path = os.path.abspath('..')  # 表示当前所处文件夹上一级文件夹的绝对路径
+                Node_coord = pd.read_excel(io=sys_path + r".\Results_Saving\Node_Coordinates_Mesh_Test.xlsx", sheet_name=0,
+                                           index_col=0)  # 读取第1个sheet的数据,不把表格的行索引读入进来
+                print('读取节点坐标数据成功')
+
+                ################### 这部分需要根据导入的数据格式进行完善 ###################
+
+            # 如果是直接传入节点坐标
+            else:
+                # 由于最小单元的边长没有传入，所以在这计算最小单元的边长
+                mesh_unit = abs(Coordinates[0][1] - Coordinates[1][1])
+
+                edges_list = get_edges_from_mesh(Coordinates, mesh_unit)
+
+                # 根据距离d、r_th、phi来计算边的故障率
+                fail_rate = cal_link_fail_probability(mesh_unit, r_th=50, phi=1.5)
+
+                for k in range(len(edges_list)):
+                    G.add_edge(*edges_list[k], dis=mesh_unit, fail_rate=fail_rate, load=0, weight=1)
+
             self.update(G)
 
         if topology =='Random':
@@ -347,11 +422,63 @@ def init_func(Area_size , Node_num, Topology, TX_range, CV_range, Coordinates, C
 
     return Ifc, App_dict
 
+def saveDataFrameToExcel(df: pd.DataFrame, fileName: str):
+    time = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')
+    df.to_excel(r'..\Results_Saving\{}_time_{}.xlsx'.format(fileName, time), index=False)
+
+def exportAppInfo(appDict: dict, fileName: str):
+    """
+    导出业务的详细信息
+    :param appDict: 业务字典
+    :param fileName: 导出后的文件名
+    """
+    df = pd.DataFrame(columns=['id', 'access', 'exit', 'demand', 'load', 'fail time', 'SLA', 'path', 'str', 'outage'])
+    for i in range(len(appDict)):
+        app = appDict.get(i)
+
+        id = app.id
+        access = app.access
+        exit = app.exit
+        demand = app.demand
+        load = app.load
+        failTime = app.fail_time
+        sla = app.SLA
+        path = app.path
+        str = app.str
+        outage = app.outage
+
+        df.loc[i] = [id, access, exit, demand, load, failTime, sla, path, str, outage]
+
+    saveDataFrameToExcel(df, fileName)
+
+def loadAppInfoFromExcel(fileName: str) -> dict:
+    """
+    从磁盘导入Excel表格并读取其中的业务信息
+    :param fileName: 导入文件的文件名
+    :return: 业务字典
+    """
+    appDict = {}
+
+    df = pd.read_excel(io='..\Results_Saving\{}.xlsx'.format(fileName))
+    for i in range(len(df)):
+        id = df.loc[i][0]
+        access = df.loc[i][1]
+        exit = df.loc[i][2]
+        demand = df.loc[i][3]
+        pri = df.loc[i][6]
+        path = df.loc[i][7]
+        strategy = df.loc[i][8]
+
+        app = App(id, access, exit, demand, pri, path, strategy)
+        appDict[id] = app
+
+    return appDict
+
 if __name__ == '__main__':
     # 参考现有的WSN仿真器的代码，完成WSN网络的构建
     # 完成网络的代码调试
     Node_num =  100
-    App_num = 20
+    App_num = 100
     Cap_node = 20
     Cap_edge = 20
     Topology = 'Random'
@@ -373,6 +500,13 @@ if __name__ == '__main__':
 
     G, App_dict = init_func(Area_size, Node_num, Topology, TX_range, CV_range, Coordinates, Cap_node, grid_size, App_num, traffic_th, Demand, Priority, Strategy)
     # G.draw_topo(Coordinates)
+
+    # 测试导出业务信息功能
+    # exportAppInfo(App_dict, "App_Info")
+
+    # 测试从Excel导入业务信息
+    appDict = loadAppInfoFromExcel('App_Info_time_2023_03_31_10_17')
+
     ave_link_fail = 0
     for e in G.edges:
         link_fail = G.adj[e[0]][e[1]]['fail_rate']
