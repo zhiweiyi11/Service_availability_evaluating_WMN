@@ -23,6 +23,7 @@ from Evolution_Model.Evolution_Conditions import *
 from Evolution_Model.Evolution_Rules import *
 from Evolution_Model.Application_request_generating import *
 from Evaluating_Scripts.Calculating_Availability import *
+from concurrent.futures import ThreadPoolExecutor
 
 def calculating_Coefficient_of_Variation(sample_data):
 	# 计算样本的方差系数
@@ -39,7 +40,7 @@ def convergence_analysis(N, T, G, App,  MTTF, MLife, MTTR, switch_time, switch_r
 	""" ## 多次演化下的业务可用度结果 """
 	for n in range(10, N):
 		st2_ = time.time()
-		pool_num = 6
+		pool_num = 10
 		args = [T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time]
 		Availability_Results, Loss_Results = Apps_availability_func(n, args, pool_num)
 		app_avail = Availability_Results.apply(calculating_Coefficient_of_Variation, axis=1)  # 对每一行数据进行求变异系数，即得到N次演化下各等级业务的方差系数
@@ -50,6 +51,8 @@ def convergence_analysis(N, T, G, App,  MTTF, MLife, MTTR, switch_time, switch_r
 		print('\n 第{}次演化下并行计算的时长为{}s'.format(n, et2_ - st2_))
 
 	return app_cv_df, app_loss_df
+
+
 
 def save_results(origin_df, file_name):
 	# 保存仿真的数据
@@ -83,12 +86,12 @@ if __name__ == '__main__':
 	Demand = np.random.normal(loc=10, scale=2, size=App_num)  # 生成平均值为5，标准差为1的带宽的正态分布
 	Priority = np.linspace(start=1, stop=5, num=5, dtype=int)
 	ratio_str = 1  # 尽量分离和尽量重用的业务占比
-	Strategy_P = ['Repetition'] * int(App_num * (1 - ratio_str))
-	Strategy_S = ['Separate'] * int(App_num * ratio_str)
+	Strategy_P = ['Global'] * int(App_num * (1 - ratio_str))
+	Strategy_S = ['Local'] * int(App_num * ratio_str)
 	Strategy = Strategy_S + Strategy_P
 
 	# 演化条件的参数
-	T = 8760
+	T = 8760*10
 	MTTF, MLife = 3000, 2000
 	MTTR = 2
 
@@ -102,7 +105,7 @@ if __name__ == '__main__':
 	G, App = init_func(Area_size, Node_num, Topology, TX_range, CV_range, Coordinates, Capacity, grid_size, App_num, traffic_th, Demand, Priority, Strategy)
 
 	# 收敛性分析的参数
-	N = 50
+	N = 20
 
 	Con_Results = convergence_analysis(N, T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
 
@@ -138,3 +141,7 @@ if __name__ == '__main__':
 	plt.ylabel('Loss of service exception (Mbps/hr)', fontdict=font)
 	plt.legend()
 	plt.show()
+
+	# 结果保存
+	save_results(Con_Results[0], '{}次仿真的服务可用度方差系数'.format(N))
+	save_results(Con_Results[1], '{}次仿真的服务带宽损失均值'.format(N))

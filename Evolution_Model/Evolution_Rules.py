@@ -41,6 +41,8 @@ def path_reroute(G, app_access, app_exit, app_path, app_demand, app_strategy, no
     '''业务的重路由分为2种策略：Global和Local'''
     if app_strategy == 'Global':
         # 全局重路由策略(从源宿节点重新找一条路)
+        # print('业务的重路由策略为{}'.format(app_strategy))
+
         # 1) 先将原始的路径上的链路权重设置为无穷大
         for i in range(len(app_path)-1):
             G_sample.adj[app_path[i]][app_path[i+1]]['weight'] = float('inf')
@@ -88,6 +90,7 @@ def path_reroute(G, app_access, app_exit, app_path, app_demand, app_strategy, no
     '''业务的Local重路由策略'''
     if app_strategy == 'Local':
     # 找出节点故障导致的业务原路径中故障的链路
+    #     print('业务的重路由策略为{}'.format(app_strategy))
         for node in node_fail_list:
             fail_node_index = app_path.index(node)
             app_access_tmp = copy.deepcopy(app_access)
