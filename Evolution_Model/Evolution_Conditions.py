@@ -29,7 +29,7 @@ def monte_carlo_sequential(nodes_info, sample=False, time_interval=12, T = 365 *
     # 序贯状态连续抽样法，根据链路的MTBF和MTTR数据获取其演化态
     def fail_state(x):
         # lam = (x['MTTF']*x['MLife']) / (x['MTTF'] + x['MLife'])  # 这里的故障率的计算是否应该用MTTF
-        lam = 1/ x['MTTF'] + 1/x['MLife']
+        lam = 1/ x['MTTF']  # + 1/x['MLife'] # 暂不考虑节点的电池寿命
         miu = 1 / x['MTTR']
         t = 0
         fail_time = []

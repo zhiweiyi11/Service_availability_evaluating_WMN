@@ -159,6 +159,7 @@ class Network(nx.Graph): # 表示继承为nx.Graph的子类
             G = nx.Graph()
             # 计算小于节点范围内的连接链路
             edges_list, edges_dis = [], []
+
             if import_file == True:# 如果从文件中导入节点坐标
                 sys_path = os.path.abspath('..') # 表示当前所处文件夹上一级文件夹的绝对路径
                 Node_coord = pd.read_excel(io= sys_path + r".\Results_Saving\Node_Coordinates.xlsx", sheet_name=0, index_col=0) # 读取第1个sheet的数据,不把表格的行索引读入进来
@@ -359,7 +360,7 @@ def RecursionFunc(arr1,arrList):
     else:
         return arr1
 
-def init_func(Area_size , Node_num, Topology, TX_range, CV_range, Coordinates, Capacity, grid_size, App_num, traffic_th,  Demand, Priority, Strategy):
+def init_func(import_file, fileName, Area_size , Node_num, Topology, TX_range, CV_range, Coordinates, Capacity, grid_size, App_num, traffic_th,  Demand, Priority, Strategy):
     # 初始化网络演化对象函数，分别返回“基础设施对象”和“业务逻辑对象”
     # 首先生成基础设施网络
     Ifc = Network(Topology, Node_num, Coordinates, TX_range, True) #最后一个参数表示是否从文件中导入节点坐标
@@ -378,53 +379,62 @@ def init_func(Area_size , Node_num, Topology, TX_range, CV_range, Coordinates, C
     random.shuffle(Priority) # 将制定业务等级的list打乱，但是各等级的数量仍然不变
     TrafficDensity = generateAppTraffic(Area_width, Area_length, grid_size, traffic_th)
 
+    if import_file == True:
+        App_dict = loadAppInfoFromExcel(fileName)
+        for i in range(len(App_dict)):
+            app = App_dict[i]
+            app.app_deploy_node(Ifc)
+            print('第{}个业务初始路径部署成功'.format(i))
+    else:
+        for i in range(App_num):
+            #　随机选择2个不重复的网格节点来作为业务的od对
+            app_od_coord = random.sample(TrafficDensity[0].keys(), 2)
+            App_coordinates = {} # 存储业务坐标信息的字典
+            od_list = []
+            while True:
+                App_coordinates[i] = app_od_coord
+                App_access = access_mapping(Node_Coordinates, App_coordinates, CV_range)
+                access = App_access[0][i]
+                exit = App_access[1][i]
+                if access and exit:
+                    od_list = RecursionFunc(access, [exit])
+                    break
+                else:
+                    app_od_coord = random.sample(TrafficDensity[0].keys(), 2)
 
-    for i in range(App_num):
-        #　随机选择2个不重复的网格节点来作为业务的od对
-        app_od_coord = random.sample(TrafficDensity[0].keys(), 2)
-        App_coordinates = {} # 存储业务坐标信息的字典
-        od_list = []
-        while True:
-            App_coordinates[i] = app_od_coord
-            App_access = access_mapping(Node_Coordinates, App_coordinates, CV_range)
-            access = App_access[0][i]
-            exit = App_access[1][i]
-            if access and exit:
-                od_list = RecursionFunc(access, [exit])
-                break
-            else:
-                app_od_coord = random.sample(TrafficDensity[0].keys(), 2)
+            pri = random.choice(Priority)
+            demand = Demand[i]
+            strategy = Strategy[i]
 
-        pri = random.choice(Priority)
-        demand = Demand[i]
-        strategy = Strategy[i]
-
-        while True:
-            tmp_od = random.choice(od_list)  # 从业务可接入节点集合中随机选择一个作为其源节点
-            source = tmp_od[0]
-            destination = tmp_od[1]
-            # 加入约束，保证业务路径是多跳的(业务的接入和退出节点不能相同)
-            path_tmp = nx.shortest_path(Ifc, source, destination) # 找包含业务源宿节点图G中一条最短路径作为业务的初始路径
-            app_path= cap_assign(Ifc, path_tmp, demand) # 根据链路的容量来确定业务是否部署在该路径上
-            if app_path:
-                app = App(i, access, exit, demand, pri, app_path, strategy)
-                print('业务{}的初始路径为{}'.format(i, app_path))
-                app.app_deploy_node(Ifc)
-                App_dict[i] = app
-                break
-            elif od_list: # 如果业务的od节点可选集合不为空
-                od_list.remove(tmp_od) # 删除掉不满足业务请求的od对
-            else:
-                print('第{}个业务初始路径部署失败...'.format(i))
-                break
-            # app = App(i, od, band_demand, pri, path_new, str)
+            while True:
+                tmp_od = random.choice(od_list)  # 从业务可接入节点集合中随机选择一个作为其源节点
+                source = tmp_od[0]
+                destination = tmp_od[1]
+                # 加入约束，保证业务路径是多跳的(业务的接入和退出节点不能相同)
+                path_tmp = nx.shortest_path(Ifc, source, destination) # 找包含业务源宿节点图G中一条最短路径作为业务的初始路径
+                app_path= cap_assign(Ifc, path_tmp, demand) # 根据链路的容量来确定业务是否部署在该路径上
+                if app_path:
+                    app = App(i, access, exit, demand, pri, app_path, strategy)
+                    print('业务{}的初始路径为{}'.format(i, app_path))
+                    app.app_deploy_node(Ifc)
+                    App_dict[i] = app
+                    break
+                elif od_list: # 如果业务的od节点可选集合不为空
+                    od_list.remove(tmp_od) # 删除掉不满足业务请求的od对
+                else:
+                    print('第{}个业务初始路径部署失败...'.format(i))
+                    break
+                # app = App(i, od, band_demand, pri, path_new, str)
             # app.app_deploy(Ifc)
 
     return Ifc, App_dict
 
 def saveDataFrameToExcel(df: pd.DataFrame, fileName: str):
     time = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')
-    df.to_excel(r'..\Results_Saving\{}_time_{}.xlsx'.format(fileName, time), index=False)
+    # df.to_excel(r'..\Results_Saving\{}_time_{}.xlsx'.format(fileName, time), index=False)
+    df.to_excel(r'..\Results_Saving\{}.xlsx'.format(fileName), index=False)
+
+    print('成功保存数据文件 \n')
 
 def exportAppInfo(appDict: dict, fileName: str):
     """
@@ -432,24 +442,31 @@ def exportAppInfo(appDict: dict, fileName: str):
     :param appDict: 业务字典
     :param fileName: 导出后的文件名
     """
-    df = pd.DataFrame(columns=['id', 'access', 'exit', 'demand', 'load', 'fail time', 'SLA', 'path', 'str', 'outage'])
+    df = pd.DataFrame(columns=['id', 'access', 'exit', 'demand', 'load', 'fail_time', 'SLA', 'path', 'strategy', 'outage'])
     for i in range(len(appDict)):
         app = appDict.get(i)
-
         id = app.id
-        access = app.access
-        exit = app.exit
+        access = [str(i) for i in app.access] # 将业务的接入节点集合存储为字符串列表，便于后续读取
+        access_str = ' '.join(access)
+
+        exit = [str(j) for j in app.exit ]
+        exit_str = ' '.join(exit)
+
         demand = app.demand
         load = app.load
         failTime = app.fail_time
         sla = app.SLA
-        path = app.path
-        str = app.str
+
+        path = [str(k) for k in app.path ]
+        path_str = ' '.join(path)
+
+        strategy = app.str
         outage = app.outage
 
-        df.loc[i] = [id, access, exit, demand, load, failTime, sla, path, str, outage]
+        df.loc[i] = [id, access_str, exit_str, demand, load, failTime, sla, path_str, strategy, outage]
 
     saveDataFrameToExcel(df, fileName)
+
 
 def loadAppInfoFromExcel(fileName: str) -> dict:
     """
@@ -461,15 +478,23 @@ def loadAppInfoFromExcel(fileName: str) -> dict:
 
     df = pd.read_excel(io='..\Results_Saving\{}.xlsx'.format(fileName))
     for i in range(len(df)):
-        id = df.loc[i][0]
-        access = df.loc[i][1]
-        exit = df.loc[i][2]
-        demand = df.loc[i][3]
-        pri = df.loc[i][6]
-        path = df.loc[i][7]
-        strategy = df.loc[i][8]
+        id = df.loc[i]['id']
 
-        app = App(id, access, exit, demand, pri, path, strategy)
+        access = df.loc[i]['access']
+        access = access.split() # 将access字符串转换为单个字符组成的列表
+        access_list = list(map(int, access)) # 将读入的字符串列表转换为int格式的列表
+        exit = df.loc[i]['exit']
+        exit = exit.split()
+        exit_list = list(map(int, exit))
+
+        demand = df.loc[i]['demand']
+        SLA = df.loc[i]['SLA']
+        path = df.loc[i]['path']
+        path = path.split()
+        path_list = list(map(int, path))
+        strategy = df.loc[i]['strategy']
+
+        app = App(id, access_list, exit_list, demand, SLA, path_list, strategy)
         appDict[id] = app
 
     return appDict
@@ -498,14 +523,13 @@ if __name__ == '__main__':
     Strategy_S = ['Local'] * int(App_num*ratio_str)
     Strategy = Strategy_S + Strategy_P
 
-    G, App_dict = init_func(Area_size, Node_num, Topology, TX_range, CV_range, Coordinates, Cap_node, grid_size, App_num, traffic_th, Demand, Priority, Strategy)
+    G, App_dict = init_func(True, 'App_Info_Local', Area_size, Node_num, Topology, TX_range, CV_range, Coordinates, Cap_node, grid_size, App_num, traffic_th, Demand, Priority, Strategy)
     # G.draw_topo(Coordinates)
 
-    # 测试导出业务信息功能
-    # exportAppInfo(App_dict, "App_Info")
-
-    # 测试从Excel导入业务信息
-    appDict = loadAppInfoFromExcel('App_Info_time_2023_03_31_10_17')
+    # # 测试导出业务信息功能
+    # exportAppInfo(App_dict, "App_Info_Global")
+    # # 测试从Excel导入业务信息
+    # appDict = loadAppInfoFromExcel('App_Info_Local')
 
     ave_link_fail = 0
     for e in G.edges:

@@ -7,9 +7,19 @@
 @Date   ：2023/3/12 17:30
 @Desc   ：用于测试一些简单的函数功能
 =================================================='''
+import os
+import threading
+import time
+from multiprocessing import cpu_count, Pool
+
 import networkx as nx
 import numpy as np
 import random
+from concurrent.futures import ThreadPoolExecutor
+
+import pandas as pd
+
+from Evaluating_Scripts.Calculating_Availability import calculateAvailability
 
 
 def RecursionFunc(arr1,arrList):
@@ -51,18 +61,133 @@ def route_search(G, source, destination, app_demand, routing_th):
     return new_app_path, reroute_times
 
 
+def async_add(max):
+    sum = 0
+    for i in range(max):
+        sum += i
+    # time.sleep(1)
+    # print(threading.current_thread().name + '执行求和操作的结果是={} \n'.format(sum) )
+    return sum
 
+def find_path(G, source, destination):
+    path = nx.shortest_path(G, source, destination)
+    print(threading.current_thread().name + '执行操作的路径结果是={} \n'.format(path))
+    time.sleep(0.5)
+    return path
 
+def multi_threading_func(N,  G):
+    # 测试结果，用简单函数进行测试发现多线程并发的计算结果更快
+    Nodes = list(G)
+
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        for i in range(N):
+            source = random.choice(Nodes)
+            destination = random.choice(Nodes)
+            future = pool.submit(find_path, G, source, destination)
+            print(future.done())
+        print('------------主线程执行结束--------------')
+
+def multi_threading_test():
+    # 多线程模块调用的基本方法
+    st1 = time.time()
+    Res = []
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        # 向线程池提交一个task
+        for i in range(100):
+            future1 = pool.submit(async_add, i)  # 向线程池提交一个task, 20作为async_add()函数的参数
+
+            # future2 = pool.submit(async_add, 50)
+            def get_result(future):
+                print(threading.current_thread().name + '运行结果：' + str(future.result()) + '\n')
+                # 这里存储的结果是乱序的，因为不同的线程执行结束的时间不确定
+                Res.append(future.result())
+
+            future1.add_done_callback(get_result)
+
+        # 测试线程是否结束，判断future1代表的任务是否执行完
+        print(future1.done())
+
+        # 定义获取结果的函数, 这样可以非阻塞地获取线程执行的结果
+        # def get_result(future):
+        #
+        #     print(threading.current_thread().name + '运行结果：' + str(future.result()) +'\n')
+        #     return future.result()
+
+        # 通过add_done_callback函数向线程池中注册了一个获取线程执行结果的函数get_result
+        ## 查看future1代表的任务返回的结果
+        # future1.add_done_callback(get_result)
+        ## 查看future2代表的任务的返回结果
+        # future2.add_done_callback(get_result)
+
+        print('------------主线程执行结束------------')
+    et1 = time.time()
+    print('多线程并发计算的时长为{}s\n'.format(et1 - st1))
+
+    st2 = time.time()
+    res = []
+    for i in range(100):
+        res.append(async_add(i))
+    et2 = time.time()
+    print('for循环计算的时长为{}s \n'.format(et2 - st2))
+
+def Apps_availability_func(N, args, pool_num):
+    '''
+    # 计算业务可用度的主函数(调用多进程并行计算)
+    :param N:  网络演化的次数
+    :param args:  网络演化模型的参数
+    :param pool_num:  开启进程池的数量
+    :return multi_avail: 各业务可用度的结果
+    '''
+    multi_avail = pd.DataFrame(index=list(args[2].keys())) # 存储N次演化下各次的业务可用度结果
+    multi_loss = pd.DataFrame(index=list(args[2].keys())) # 存储N次演化下各次业务的带宽损失结果
+
+    print('CPU内核数为{}'.format(cpu_count()))
+    print('当前母进程为{}'.format(os.getpid()))
+    pool = Pool(pool_num)  # 开启pool_num个进程, 需要小于本地CPU的个数
+
+    for n in range(N):
+        # t1 = time.time()
+        # functions are only picklable if they are defined at the top-level of a module.(函数尽可以被调用当其位于模块中的顶层)
+        res = pool.apply_async(func=calculateAvailability, args=args)  # 使用多个进程池异步进行计算，apply_async执行函数,当有一个进程执行完毕后，会添加一个新的进程到pool中
+        multi_avail.loc[:, n + 1] = pd.Series(res.get()[0])  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
+        multi_loss.loc[:, n + 1] = pd.Series(res.get()[1])
+        # t2 = time.time()
+        # print('------------------分隔线---------------当前完成第{}次演化，耗时{}min'.format(n, (t2-t1)/60))
+
+    pool.close()
+    pool.join()  # #调用join之前，一定要先调用close() 函数，否则会出错, close()执行后不会有新的进程加入到pool,join函数等待素有子进程结束
+
+    return multi_avail, multi_loss
 
 if __name__ == '__main__':
-    line_List = [['aa', 'bb', 'cc'], ['dd', 'ee', 'ff'], ['gg', 'hh']]
-    num_list = [[69, 31, 98], [61, 97, 78] ]
+    # line_List = [['aa', 'bb', 'cc'], ['dd', 'ee', 'ff'], ['gg', 'hh']]
+    # num_list = [[69, 31, 98], [61, 97, 78] ]
+    #
+    # caseslist = RecursionFunc(line_List[0], line_List[1:])
+    # numslist = RecursionFunc(num_list[0], num_list[1:])
+    # for num in numslist:
+    #     print(num)
+    #     print('*******\n')
+    G = nx.random_graphs.erdos_renyi_graph(100, 0.2)
+    N = 10
+    Nodes = list(G)
+    start_time = time.time()
+    for i in range(N):
+        source = random.choice(Nodes)
+        destination = random.choice(Nodes)
+        print('源节点为{}，宿节点为{}'.format(source, destination))
+        path = find_path(G, source, destination)
+        print('业务路径为{}'.format(path))
 
-    caseslist = RecursionFunc(line_List[0], line_List[1:])
-    numslist = RecursionFunc(num_list[0], num_list[1:])
-    for num in numslist:
-        print(num)
-        print('*******\n')
+    end_time = time.time()
+    print('for循环{}次的总耗时为{}s'.format(N, end_time-start_time))
+
+    t1 = time.time()
+    multi_threading_func(N, G)
+    t2 = time.time()
+    print('多线程并发{}次的总耗时为{}s'.format(N, t2-t1))
+
+
 
 ''' 临时保存演化规则中路由部分的代码
     if strategy == 'Separate':

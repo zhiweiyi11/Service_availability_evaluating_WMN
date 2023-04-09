@@ -7,6 +7,9 @@
 @Date   ：2023/3/13 11:32
 @Desc   ： 计算服务的可用度
 =================================================='''
+import random
+import threading
+
 import numpy as np
 import networkx as nx
 import copy
@@ -16,6 +19,7 @@ import os
 from multiprocessing import  cpu_count
 
 import pandas as pd
+from numba.cuda.cudadrv.runtime import Runtime
 
 from Evolution_Model.Evolution_Objects import *
 from Evolution_Model.Evolution_Conditions import *
@@ -58,15 +62,15 @@ def single_availability(App_set, Switch_time, Survival_time, T):
 def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time):
     # 生成网络演化对象和演化条件，调用演化规则，来模拟网络的演化过程(Sub_service为服务部署的节点集合)
     # 1: 生成网络的演化对象
-    start_time = time.time()
-    routing_th = 10 # 重路由的次数
-    G_tmp, App_tmp = copy.deepcopy(G), copy.deepcopy(App_dict)
+    routing_th = 10 # 重路由的次数阈值
+    # G_tmp, App_tmp = copy.deepcopy(G), copy.deepcopy(App_dict)
+    G_tmp , App_tmp  = G, App_dict
     Nodes = list(G)
 
     # 2: 生成网络的演化条件
     evo_conditions = cond_func(G_tmp, MTTF, MLife, MTTR, T)  # 各链路的MTTF、MTTR具体值在函数中根据对应的分布进行修改
     time_list = evo_conditions.index.tolist()  # 网络发生演化的时刻
-    print('生成的演化态数量为{}'.format(len(time_list)))
+    # print('生成的演化态数量为{}'.format(len(time_list)))
 
     # 3: 触发网络的演化规则
     App_interupt = [] # 发生中断的业务集合
@@ -95,6 +99,7 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR, switch_time, switch
                 app = App_tmp[app_id]
                 app_path = app.path
                 new_app_path, reroute_times = path_reroute(G_tmp, app.access, app.exit, app_path, app.demand, app.str, [], routing_th)
+                # new_app_path, reroute_times = [], 0
             # action3: 对业务进行重新部署
                 if new_app_path:  # 如果业务的新路径不为空
                     app.path = new_app_path
@@ -128,6 +133,8 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR, switch_time, switch
                 app_path = app.path
                 # 区别在重路由计算的输入参数不一样
                 new_app_path, reroute_times = path_reroute(G_tmp, app.access, app.exit, app_path, app.demand, app.str, nodes_fail, routing_th)
+                # print('业务的新路径为{}, 重路由的次数为{}'.format(new_app_path, reroute_times))
+
             # action3: 对业务进行重新部署
                 rand_seed = random.random() # 生成随机数来作为路径倒换的判断
                 if new_app_path and rand_seed <= switch_rate:  # 如果业务的新路径不为空
@@ -139,79 +146,55 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR, switch_time, switch
                     App_interupt.append(app_id)  # 从待恢复的业务集合中移除完成上线的业务id
                     app.fail_time = evo_time
 
-    print('当前演化下业务可用度计算完成\n')
-    onetime_availability = single_availability(App_tmp, switch_time, survival_time, T)
-
+    onetime_availability = single_availability(App_tmp, switch_time, survival_time, T) # 单次演化的业务可用度结果
+    # print('当前演化下业务可用度计算完成 \n')
+    # time.sleep(2)
+    # print(threading.current_thread().name + '执行操作的业务可用度结果是={} \n'.format(onetime_availability[0][1] ))
     return onetime_availability
+
 
 def Apps_Availability_Count(N, func_name, T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time):
     # 开启多线程进行并行计算
     # 调用 ThreadPoolExecutor 类的构造器创建一个包含20条线程的线程池
     multi_avail = pd.DataFrame(index=list(App.keys())) # 存储N次演化下各次的业务可用度结果
     multi_loss = pd.DataFrame(index=list(App.keys())) # 存储N次演化下各次业务的带宽损失结果
+    res_avail, res_loss = [], []
+    task = []
+    # executor = ThreadPoolExecutor(max_workers=10)
+    G_tmp, App_tmp = G, App
+    with ThreadPoolExecutor(max_workers=200) as pool:
+        for i in range(N):
+            G_tmp, App_tmp = copy.deepcopy(G), copy.deepcopy(App) # 这里采用了深拷贝，会影响多线程的执行速率
+            future = pool.submit(func_name, T, G_tmp, App_tmp, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
+            def get_result(future):
+                # 定义获取结果的函数, 这样可以非阻塞地获取线程执行的结果
+                res = future.result()  # 获取该 Future 代表的线程任务最后返回的结果,若Future代表的线程任务还未完成，该方法会阻塞当前线程，timeout参数指定最多阻塞多少秒
+                res_avail.append(res[0]) # 因为结果是乱序的，所以只能先用list添加进来
+                res_loss.append(res[1])
 
-    executor = ThreadPoolExecutor(max_workers=10)
-    result = []
-    RES = []
-    def get_result(future):
-        res = future.result()  # 获取该 Future 代表的线程任务最后返回的结果,若Future代表的线程任务还未完成，该方法会阻塞当前线程，timeout参数指定最多阻塞多少秒
-        return res[0]
+            future.add_done_callback(get_result) # 通过add_done_callback函数向线程池中注册了一个获取线程执行结果的函数get_result
 
-    for i in range(N):
-        # 调用 ThreadPoolExecutor 对象的 submit() 方法来提交线程任务
-        task = executor.submit(func_name, T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time) # 将 fn 函数提交给线程池：*args 代表传给 fn 函数的参数，*kwargs 代表以关键字参数的形式为 fn 函数传入参数
-        print('当前第{}次调用线程'.format(i))
-        result.append(task)
-        # result.append(task.add_done_callback(get_result)) # 当线程任务完成后，程序会自动触发该回调函数，并将对应的 Future 对象作为参数传给该回调函数
-
-
-    wait(result) # 阻塞主进程，直到所有的子线程都执行完
+        # print(future.done())
+        # wait(task)  # 阻塞主进程，直到所有的子线程都执行完
+    print('-------------主线程执行结束------------')
     # 关闭线程池
     # executor.shutdown(wait=True)
+    return res_avail, res_loss
 
-    return RES
-
-
-
-def Apps_availability_func(N, args, pool_num):
-    '''
-    # 计算业务可用度的主函数(调用多进程并行计算)
-    :param N:  网络演化的次数
-    :param args:  网络演化模型的参数
-    :param pool_num:  开启进程池的数量
-    :return multi_avail: 各业务可用度的结果
-    '''
-    multi_avail = pd.DataFrame(index=list(args[2].keys())) # 存储N次演化下各次的业务可用度结果
-    multi_loss = pd.DataFrame(index=list(args[2].keys())) # 存储N次演化下各次业务的带宽损失结果
-
-    print('CPU内核数为{}'.format(cpu_count()))
-    print('当前母进程为{}'.format(os.getpid()))
-    pool = Pool(pool_num)  # 开启pool_num个进程, 需要小于本地CPU的个数
-
-    for n in range(N):
-        # t1 = time.time()
-        # functions are only picklable if they are defined at the top-level of a module.(函数尽可以被调用当其位于模块中的顶层)
-        res = pool.apply_async(func=calculateAvailability, args=args)  # 使用多个进程池异步进行计算，apply_async执行函数,当有一个进程执行完毕后，会添加一个新的进程到pool中
-        multi_avail.loc[:, n + 1] = pd.Series(res.get()[0])  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
-        multi_loss.loc[:, n + 1] = pd.Series(res.get()[1])
-        # t2 = time.time()
-        # print('------------------分隔线---------------当前完成第{}次演化，耗时{}min'.format(n, (t2-t1)/60))
-
-    pool.close()
-    pool.join()  # #调用join之前，一定要先调用close() 函数，否则会出错, close()执行后不会有新的进程加入到pool,join函数等待素有子进程结束
-
-    return multi_avail, multi_loss
-
-def Apps_Availability_MC(N,T, App_set, G, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time):
+def Apps_Availability_MC(N,T, G, App_set,  MTTF, MLife, MTTR, switch_time, switch_rate, survival_time):
     # 计算业务可用度的主函数，采用蒙特卡洛方法
+
     multi_avail = pd.DataFrame(index=list(App_set.keys())) # 存储N次演化下各次的业务可用度结果
     multi_loss = pd.DataFrame(index=list(App_set.keys())) # 存储N次演化下各次业务的带宽损失结果
 
     for n in range(N):
-        result = calculateAvailability(T, G, App_set, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
+        G_tmp = copy.deepcopy(G)
+        App_tmp = copy.deepcopy(App_set)
+        result = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
+        # print('当前第{}次循环业务的可用度为{}'.format(n, result[0][1]))
         multi_avail.loc[:, n + 1] = pd.Series(result[0])  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
         multi_loss.loc[:, n + 1] = pd.Series(result[1])
-        # print('\n 当前为第{}次蒙卡仿真'.format(n))
+        print('\n 当前为第{}次蒙卡仿真'.format(n))
 
     return multi_avail, multi_loss
 
@@ -225,6 +208,7 @@ def save_results(origin_df, file_name):
     with pd.ExcelWriter(sys_path + r'.\Results_saved\{}_time{}.xlsx'.format(file_name, time2)) as xlsx: # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。
         origin_df.to_excel(xlsx, sheet_name='app_avail', index=False) # 不显示行索引
         print('数据成功保存')
+
 
 
 if __name__ == '__main__':
@@ -258,32 +242,34 @@ if __name__ == '__main__':
     ## 重路由相关的参数
     switch_time = 10
     switch_rate = 0.99
-    survival_time = 3*switch_time # 允许的最大重路由次数为5次
+    survival_time = 3*switch_time # 允许的最大重路由次数为3次
 
     # 初始化网络演化对象
     start_time = time.time()
-    G, App = init_func(Area_size, Node_num, Topology, TX_range, CV_range, Coordinates, Capacity, grid_size,  App_num, traffic_th, Demand, Priority, Strategy)
+    G, App = init_func(True, 'App_Info_Local', Area_size, Node_num, Topology, TX_range, CV_range, Coordinates, Capacity, grid_size,  App_num, traffic_th, Demand, Priority, Strategy)
     # 生成网络演化条件
-    AppAvailability_results = calculateAvailability(T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
-    end_time = time.time()
-    print('\n 单次网络演化的时长为{}s \n'.format(end_time-start_time))
+    # AppAvailability_results = calculateAvailability(T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
+    # end_time = time.time()
+    # print('\n 单次网络演化的时长为{}s \n'.format(end_time-start_time))
 
     # 测试多进程/线程运行结果是否正确
-    N = 10
-    pool_num = 6
-    args = [T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time]
-    # Availability_Results = Apps_availability_func(N, args, pool_num)
-    st1 = time.time()
+    N = 20
+
+    # args = [T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time]
+    # # Availability_Results = Apps_availability_func(N, args, pool_num)
+    # st1 = time.time()
     # RES = Apps_Availability_Count(N, calculateAvailability, T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
-    Res = Apps_availability_func(N, args, pool_num)
-    et1 = time.time()
-    print('\n 采用多进程计算{}次网络演化的时长为{}s \n'.format(N, et1 - st1))
+    #
+    # et1 = time.time()
+    # print('\n 采用多线程计算{}次网络演化的时长为{}s \n'.format(N, et1 - st1))
 
     # 测试普通蒙卡的仿真效率
+
     st2 = time.time()
-    Res2 = Apps_Availability_MC(N,T, App, G, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
+    Res2 = Apps_Availability_MC(N, T,  G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
     et2 = time.time()
     print('\n 采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, et2 - st2))
+
 
 
 

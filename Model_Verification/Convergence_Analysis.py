@@ -42,7 +42,7 @@ def convergence_analysis(N, T, G, App,  MTTF, MLife, MTTR, switch_time, switch_r
 		st2_ = time.time()
 		pool_num = 10
 		args = [T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time]
-		Availability_Results, Loss_Results = Apps_availability_func(n, args, pool_num)
+		Availability_Results, Loss_Results = Apps_Availability_Count(n, calculateAvailability, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
 		app_avail = Availability_Results.apply(calculating_Coefficient_of_Variation, axis=1)  # 对每一行数据进行求变异系数，即得到N次演化下各等级业务的方差系数
 		app_cv_df.loc[:, n] = app_avail
 		app_loss_df.loc[:, n] = Loss_Results.mean(axis=1) # 对每一行数据求均值
