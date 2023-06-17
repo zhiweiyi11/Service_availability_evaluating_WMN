@@ -150,26 +150,45 @@ def cond_func(G, MTTF, MLife, MTTR, T):
 if __name__ == '__main__':
     print('hello world!')
 
-    Num_node = 100
-    Cap_node = 5
-    Energe_node = 1000
-    Area_width, Area_length = 250, 250
-    TX_range = 50  # 传输范围为区域面积的1/5时能够保证网络全联通
+    # 完成网络的代码调试
+    import_file = False
+    Node_num = 100
+    Topology = 'Random'
+    Area_size = (250, 150)
+    Area_width, Area_length = 250, 150
+    Coordinates = generate_positions(Node_num, Area_width, Area_length)
+
+    # TX_range = 50 # 传输范围为区域面积的1/5时能够保证网络全联通
+    transmit_power = 15  # 发射功率(毫瓦)，统一单位：W
+    path_loss = 2.5  # 单位：无
+    noise = pow(10,
+                -10)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
+    bandwidth = 20 * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz
+    lambda_TH = 8 * pow(10, -1)  # 接收器的敏感性阈值,用于确定节点的传输范围
+    TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss)
+    CV_range = 30  # 节点的覆盖范围
+
+    # 业务请求的参数
     App_num = 20
-    SLA = 3
-    Band = 5
-    Strategy = 'Local'  # 业务重路由的策略为局部重路由
+    grid_size = 5
+    traffic_th = 0.5  # 业务网格的流量阈值
+    App_Demand = np.random.normal(loc=5, scale=1, size=App_num)  # 生成平均值为5，标准差为1的业务带宽请求的整体分布
+    App_Priority = [1, 2, 3]
+    ratio_str = 1  # 尽量分离和尽量重用的业务占比
+    Strategy_P = ['Global'] * int(App_num * (1 - ratio_str))
+    Strategy_S = ['Local'] * int(App_num * ratio_str)
+    App_Strategy = Strategy_S + Strategy_P
+
+    G = Network(Topology, Node_num, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_file)
+    G, Apps = init_func(G, Coordinates, Area_size, CV_range, grid_size, traffic_th, App_num, App_Demand, App_Priority,
+                        App_Strategy)
+
     # 演化条件的参数
     T = 8760
     MTTF, MLife = 1000, 800
     MTTR = 2
 
-    ## 网络和业务的初始化
-    Coordinates = generate_positions(Num_node, Area_width, Area_length)
 
-    G = Network('Random', Num_node, Coordinates, TX_range, False)
-    G.draw_topo(Coordinates, False) # False表示不从excel中导入坐标
-    G.set_node_attributes(Cap_node, Coordinates)
 
     Evo_conditions = cond_func(G, MTTF, MLife, MTTR, T)
     print('网络演化态的数量为{}'.format(len(Evo_conditions)))

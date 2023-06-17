@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
 	# 初始化网络演化对象
 	start_time = time.time()
-	G, App = init_func(Area_size, Node_num, Topology, TX_range, CV_range, Coordinates, Capacity, grid_size, App_num, traffic_th, Demand, Priority, Strategy)
+	G, App = init_func(True, 'App_Info_Local', Area_size, Node_num, Topology, TX_range, CV_range, Coordinates, Capacity, grid_size, App_num, traffic_th, Demand, Priority, Strategy)
 
 	# 收敛性分析的参数
 	N = 20
