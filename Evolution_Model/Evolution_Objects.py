@@ -268,9 +268,10 @@ class App(object):
         for i in range(len(self.path) - 1):  # 依次读取路径列表中前后2个数据组成连边
             if G.has_edge(self.path[i], self.path[i + 1]):  # 判断业务路径是否有真实的物理拓扑
                 app_list = G.get_edge_data(self.path[i], self.path[i + 1])['app_dp']  # 将该边上原有的、已加载业务信息读取出来，因为后面更新改变的业务属性时会被覆盖掉
-                # if self.id not in app_list:
-                #     print('edge is {}, and info is {}'.format([self.path[i], self.path[i+1]], G.edges[self.path[i], self.path[i+1]] ))
-                #     print('app id is {}'.format(self.id))
+                if self.id not in app_list:
+                    print('edge is {}, and info is {}'.format([self.path[i], self.path[i+1]], G.edges[self.path[i], self.path[i+1]] ))
+                    print('app id is {}'.format(self.id))
+                    print('app path is {}'.format(self.path))
                 # else:
                 #     print('app {} is successfully removed '.format(self.id))
                 app_list.remove(self.id)

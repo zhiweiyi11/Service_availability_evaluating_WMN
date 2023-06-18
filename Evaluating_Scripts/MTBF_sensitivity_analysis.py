@@ -29,12 +29,22 @@ def save_results(origin_df, file_name):
     origin_df.to_excel(r'..\Results_Saving\{}_{}.xlsx'.format(file_name, time2), index=False)
     print('数据成功保存')
 
-def calculate_SLA_results(multi_res):
+def calculate_SLA_results(Apps, multi_app_res):
     # 计算不同SLA等级下的业务可用度\业务带宽损失
+    App_id_SLA = {1:[], 2:[], 3:[], 4:[], 5:[]}
+    ## 1.先统计不同SLA对应的业务id
+    for i in range(len(Apps)):
+        SLA = Apps[i].SLA
+        App_id_SLA[SLA].append(i)
+
+    ## 2.再计算不同SLA下各业务的平均值( average=(该SLA下单个业务的N次演化平均)/Num_SLA )
     SLA_res = {}
-    for i in range(1, 6):
-        res = multi_res.iloc[(i-1)*20:i*20].apply(np.mean, axis =1 )# 对N次演化下业务可用度的结果求均值，对dataFrame的每行进行操作
-        SLA_res[i] = np.mean(res) # 对SLA等级下的所有业务可用度的均值再求均值，作为该等级下的业务可用度
+    for SLA, app_list in App_id_SLA.items():
+        Ave_SLA = [] # 统计各SLA下业务多次演化的平均值
+        for app_id in app_list:
+            res = np.mean(multi_app_res.loc[app_id])
+            Ave_SLA.append(res)
+        SLA_res[SLA] = np.mean(Ave_SLA) # 对SLA等级下的所有业务可用度的均值再求均值，作为该等级下的业务可用度
     return SLA_res
 
 def calculate_MTBF_analysis(MTTF_list, N, G, App_set):
@@ -51,8 +61,8 @@ def calculate_MTBF_analysis(MTTF_list, N, G, App_set):
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
 
-        SLA_avail = calculate_SLA_results(res[0])
-        whole_avail = calculate_SLA_results(res[1])
+        SLA_avail = calculate_SLA_results(App_set, res[0])
+        whole_avail = res[1].apply(np.mean, axis=1) # 对dataframe中的每一行应用求平均值
         mttf_single_avail.loc[:, mttf] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
         mttf_whole_avail.loc[:, mttf] = pd.Series(whole_avail)
 

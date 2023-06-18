@@ -27,7 +27,7 @@ from Evolution_Model.Evolution_Rules import *
 from Evolution_Model.Application_request_generating import *
 from concurrent.futures import ThreadPoolExecutor, wait
 from concurrent.futures import ProcessPoolExecutor
-
+from Evaluating_Scripts.MTBF_sensitivity_analysis import *
 from multiprocessing.pool import ThreadPool as Pool
 
 
@@ -66,7 +66,7 @@ def single_availability(App_set, T, beta, traffic_threshold):
         # 服务的性能可用度=1-(总性能损失值)/总期望的性能
         app_performance_avail = 1 - ((app_unavail * app_demand) + (perf_loss ))/ (3600*T*app_demand)
         if app_performance_avail < 0.9:
-            print(app_out['degradation'])
+            print('业务{}的性能可用度为{}'.format(app_id, app_out['degradation']))
 
         Apps_time_avail[app_id] = app_time_avail #
         Apps_performance_avail[app_id] = app_performance_avail
@@ -99,11 +99,12 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, me
         evo_time = time_list[i]
         # print('当前的演化时刻为{}'.format(evo_time))
         nodes_fail = evo_conditions.iloc[i]['fail']
+        # print('故障节点为{}'.format(nodes_fail))
         nodes_reco = evo_conditions.iloc[i]['repair']
         # 3.1: 首先根据修复的构件,对等待上线的业务进行恢复
         component_repair(G_tmp, App_tmp, App_interrupt, evo_time, nodes_reco)
-        # if App_interrupt:
-        #     print('仍然中断的app为{}'.format(App_interrupt))
+        if App_interrupt:
+            print('仍然中断的app为{}'.format(App_interrupt))
         #     for app_id in App_interrupt:
         #         print('仍然中断的app {} 的故障时刻为{}'.format(app_id, App_tmp[app_id].fail_time))
 
@@ -135,7 +136,7 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, me
                 app.path = app_new_path
                 app.outage['reroute'].append(reroute_duration)
                 app.app_deploy_node(G_tmp) # 将业务新的路径部署到节点上去
-                # action4: 对业务进行带宽分配操作
+                '''# action4: 对业务进行带宽分配操作
                 app_original_load = app.load
                 app_new_load, degradation_duration, degradation_time = load_allocate(G_tmp, evo_time, app.path, app.demand, app_original_load, app.down_time)
                 app.down_time = degradation_time
@@ -143,6 +144,54 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, me
                 if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
                     app.outage['degradation'].append(degradation_duration)
                 app.app_deploy_edge(G_tmp)
+                '''
+                # action4 :对多业务进行带宽分配的调整
+                App_allocated_load = app_load_allocating(G_tmp, App_tmp, app_id, app_new_path)
+                print('业务带宽重分配的结果为{}'.format(App_allocated_load))
+                for id, load in App_allocated_load.items():
+                    if id == app_id:
+                        app_original_load = App_tmp[id].load # 记录业务的原负载
+                        App_tmp[id].load = load # 赋值给业务的负载
+                        App_tmp[id].app_deploy_edge(G_tmp) # 将业务的负载部署至网络上
+                        # print('业务{}的新路径{}被重新部署至网络上 \n'.format(id, App_tmp[id].path))
+                        degradation_duration, degradation_time = app_degradation(evo_time, App_tmp[id].demand, app_original_load, load, App_tmp[id].down_time)
+                        # App_tmp[id].down_time = degradation_time # 更新业务降级的时刻
+                        # if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
+                        #     App_tmp[id].outage['degradation'].append(degradation_duration)
+                        if App_tmp[id].down_time == evo_time and App_tmp[id].outage['degradation']: # 如果降级发生在当前的演化时刻且业务之前已经发生过降级
+                            if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
+                                duration = list(App_tmp[id].outage['degradation'][-1].values())[0] # 读取上一次记录的业务降级的持续时间
+                                # print('业务{}的旧负载为{}'.format(id, app_original_load))
+                                App_tmp[id].outage['degradation'][-1] = {load: duration} # 仅替换降级发生时的负载为当前业务分配的负载load
+                                # print('业务{}降级时负载替换成功为{}'.format(id, {load:duration}))
+                        else:
+                            if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
+                                App_tmp[id].outage['degradation'].append(degradation_duration)
+                        App_tmp[id].down_time = degradation_time # 更新业务降级的时刻
+
+                    else:
+                        # print('app {} 属于被动重分配'.format(id))
+                        app_original_load = App_tmp[id].load # 记录业务的原负载
+                        App_tmp[id].app_undeploy_edge(G_tmp) # 先将业务原来映射路径上各链路的负载更新
+                        # print('业务{}解除到链路映射时的路径为{}'.format(id, App_tmp[id].path))
+                        App_tmp[id].load = load # 赋值给业务的负载
+                        App_tmp[id].app_deploy_edge(G_tmp)
+                        # print('业务{}恢复到链路映射时的路径为{}'.format(id, App_tmp[id].path))
+                        degradation_duration, degradation_time = app_degradation(evo_time, App_tmp[id].demand, app_original_load, load, App_tmp[id].down_time)
+
+                        if App_tmp[id].down_time == evo_time and App_tmp[id].outage['degradation']: # 如果降级发生在当前的演化时刻且业务之前已经发生过降级
+                            if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
+                                duration = list(App_tmp[id].outage['degradation'][-1].values())[0] # 读取上一次记录的业务降级的持续时间
+                                # print('业务{}的旧负载为{}'.format(id, app_original_load))
+                                App_tmp[id].outage['degradation'][-1] = {load: duration} # 仅替换降级发生时的负载为当前业务分配的负载load
+                                # print('业务{}降级时负载替换成功为{}'.format(id, {load:duration}))
+                        elif App_tmp[id].down_time == evo_time and not App_tmp[id].outage['degradation']: # 如果业务是首次降级，并且在该次演化下发生多次降级
+                            # 这种情况下只要更新业务的load就行,因为业务才刚刚开始降级
+                            continue
+                        else:
+                            if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
+                                App_tmp[id].outage['degradation'].append(degradation_duration)
+                        App_tmp[id].down_time = degradation_time # 更新业务降级的时刻
 
             else:
                 App_interrupt.append(app_id)
@@ -266,11 +315,12 @@ if __name__ == '__main__':
     beta = 0.8 # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
 
     # 业务可用度评估计算
-    N = 50 # 网络演化的次数
+    N = 1 # 网络演化的次数
 
     # app_results = calculateAvailability(T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time,  path_calculating_time, beta, demand_th)
     st = time.time()
     Multi_app_results = Apps_Availability_MC(N, T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time,   path_calculating_time, beta, traffic_th)
+    SLA_app_results = calculate_SLA_results(Apps, Multi_app_results[0])
     et = time.time()
     print('\n 采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, et - st))
 
