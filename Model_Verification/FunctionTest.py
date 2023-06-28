@@ -11,13 +11,15 @@ import os
 import threading
 import time
 from multiprocessing import cpu_count, Pool
+import math
 
 import networkx as nx
 import numpy as np
 import random
 from concurrent.futures import ThreadPoolExecutor
-
+from sympy import *
 import pandas as pd
+from sympy import exp
 
 from Evaluating_Scripts.Calculating_Availability import calculateAvailability
 
@@ -159,7 +161,151 @@ def Apps_availability_func(N, args, pool_num):
 
     return multi_avail, multi_loss
 
+def function_SINR(s, d_ij, d_interferer_list):
+    m = 4
+    gamma = 1
+    W = 0.0001
+    # d_ij = 20
+    # d_interferer_list = [35]
+    alpha = 2
+    Pt = 1.5
+    # s = symbols('s', real=True)
+    k = (m * gamma * W) / (Pt*pow(d_ij, -alpha))
+
+    y1 = 1
+    for d_vj in d_interferer_list:
+        b = gamma * pow((d_vj / d_ij), -alpha)
+        print('b 的值为{}'.format(b))
+        y1 *= pow( (1+s*b), -m)
+    y2 = exp(-k*s)  * y1
+
+    return y2
+
+
+def calculate_SINR_outage_probability(m, d_ij, d_interferer_list):
+    '''
+    # 计算基于SINR的链路故障率
+    :param gamma: SINR 阈值, 通常为1
+    :param W: 噪声功率, 0.0001 W
+    :param alpha: 路损指数, 在[2,6]之间取值
+    :param m: 衰落系数的形状参数, 4
+    :param d_ij: 链路(v_i, v_j)的距离
+    :param d_interferer_list: 干扰节点的距离集合
+    :return:
+    '''
+    res = 0
+    s = symbols('s', real= True)
+    for n in range(m):
+        aa = pow(-1, n)/np.math.factorial(n)
+        print('aa is {}'.format(aa))
+        bb = diff(function_SINR(s, d_ij, d_interferer_list), s , n).subs({s:1})
+        print('bb is {}'.format(bb))
+        res += aa*bb
+    outage_probability = 1- res
+    return outage_probability
+
+def degradation_time_calculate():
+    # 存放计算多业务降级时长的代码
+    pass
+    '''# action4: 对业务进行带宽分配操作
+    app_original_load = app.load
+    app_new_load, degradation_duration, degradation_time = load_allocate(G_tmp, evo_time, app.path, app.demand, app_original_load, app.down_time)
+    app.down_time = degradation_time
+    app.load = app_new_load
+    if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
+        app.outage['degradation'].append(degradation_duration)
+    app.app_deploy_edge(G_tmp)
+    '''
+
+    ''' # 这里为对多业务的带宽分配
+    # action4 :对多业务进行带宽分配的调整
+    App_allocated_load = app_load_allocating(G_tmp, App_tmp, app_id, app_new_path)
+    # print('业务带宽重分配的结果为{}'.format(App_allocated_load))
+    for id, load in App_allocated_load.items(): # 把重路由部署的业务放到最后一个更新,
+        if id == app_id:
+            continue
+            # app_original_load = App_tmp[id].load # 记录业务的原负载
+            # App_tmp[id].load = load # 赋值给业务的负载
+            # App_tmp[id].app_deploy_edge(G_tmp) # 将业务的负载部署至网络上
+            # # print('业务{}的新路径{}被重新部署至网络上 \n'.format(id, App_tmp[id].path))
+            # degradation_duration, degradation_time = app_degradation(evo_time, App_tmp[id].demand, app_original_load, load, App_tmp[id].down_time)
+            # if App_tmp[id].down_time == evo_time and App_tmp[id].outage['degradation']: # 如果降级发生在当前的演化时刻且业务之前已经发生过降级
+            #     if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
+            #         duration = list(App_tmp[id].outage['degradation'][-1].values())[0] # 读取上一次记录的业务降级的持续时间
+            #         # print('业务{}的旧负载为{}'.format(id, app_original_load))
+            #         App_tmp[id].outage['degradation'][-1] = {load: duration} # 仅替换降级发生时的负载为当前业务分配的负载load
+            #         # print('业务{}降级时负载替换成功为{}'.format(id, {load:duration}))
+            # else:
+            #     if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
+            #         App_tmp[id].outage['degradation'].append(degradation_duration)
+            # App_tmp[id].down_time = degradation_time # 更新业务降级的时刻
+        else:
+            # print('app {} 属于被动重分配'.format(id))
+            app_original_load = App_tmp[id].load # 记录业务的原负载
+            App_tmp[id].app_undeploy_edge(G_tmp) # 先将业务原来映射路径上各链路的负载更新
+            # print('业务{}解除到链路映射时的路径为{}'.format(id, App_tmp[id].path))
+            App_tmp[id].load = load # 赋值给业务的负载
+            App_tmp[id].app_deploy_edge(G_tmp)
+            print('业务{}恢复到链路映射时的路径为{}'.format(id, App_tmp[id].path))
+            degradation_duration, degradation_time = app_degradation(evo_time, App_tmp[id].demand, app_original_load, load, App_tmp[id].down_time)
+
+            if App_tmp[id].down_time == evo_time and App_tmp[id].outage['degradation']: # 如果降级发生在当前的演化时刻且业务之前已经发生过降级
+                if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
+                    duration = list(App_tmp[id].outage['degradation'][-1].values())[0] # 读取上一次记录的业务降级的持续时间
+                    # print('业务{}的旧负载为{}'.format(id, app_original_load))
+                    App_tmp[id].outage['degradation'][-1] = {load: duration} # 仅替换降级发生时的负载为当前业务分配的负载load
+                    # print('业务{}降级时负载替换成功为{}'.format(id, {load:duration}))
+            elif App_tmp[id].down_time == evo_time and not App_tmp[id].outage['degradation']: # 如果业务是首次降级，并且在该次演化下发生多次降级
+                # 这种情况下只要更新业务的load就行,因为业务才刚刚开始降级
+                continue
+            else:
+                if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
+                    App_tmp[id].outage['degradation'].append(degradation_duration)
+            App_tmp[id].down_time = degradation_time # 更新业务降级的时刻
+
+    # 最后更新重路由成功的业务的负载
+    app_original_load = App_tmp[app_id].load  # 记录业务的原负载
+    App_tmp[app_id].load = App_allocated_load[app_id]  # 赋值给业务的负载
+    App_tmp[app_id].app_deploy_edge(G_tmp)  # 将业务的负载部署至网络上
+    # print('业务{}的新路径{}被重新部署至网络上 \n'.format(id, App_tmp[id].path))
+    degradation_duration, degradation_time = app_degradation(evo_time, App_tmp[app_id].demand,
+                                                             app_original_load, App_tmp[app_id].load, App_tmp[app_id].down_time)
+    if App_tmp[app_id].down_time == evo_time and App_tmp[app_id].outage['degradation']:  # 如果降级发生在当前的演化时刻且业务之前已经发生过降级
+        if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
+            duration = list(App_tmp[app_id].outage['degradation'][-1].values())[0]  # 读取上一次记录的业务降级的持续时间
+            # print('业务{}的旧负载为{}'.format(id, app_original_load))
+            App_tmp[app_id].outage['degradation'][-1] = {App_tmp[app_id].load: duration}  # 仅替换降级发生时的负载为当前业务分配的负载load
+            # print('业务{}降级时负载替换成功为{}'.format(id, {load:duration}))
+    else:
+        if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
+            App_tmp[app_id].outage['degradation'].append(degradation_duration)
+    App_tmp[app_id].down_time = degradation_time  # 更新业务降级的时刻
+    '''
+
+
 if __name__ == '__main__':
+    # m = 4
+    # res = calculate_SINR_outage_probability(m)
+    m = 4
+    gamma = 1
+    W = 0.0001
+    d_ij = 30
+    d_interferer_list = [15, 35]
+    alpha = 2.5
+    Pt = 1.5
+    # s = symbols('s', real=True)
+    k = (m*gamma*W)/(Pt* pow(d_ij, -alpha))
+    b = gamma*pow((d_ij/25),-alpha)
+    s = symbols('s')
+    f = function_SINR(s, d_ij, d_interferer_list)
+    # r = diff(f, s, 4).subs({s:1})
+    # print(r)
+
+    res = calculate_SINR_outage_probability(m, d_ij, d_interferer_list)
+    print('链路的故障概率为{}'.format(res))
+
+    # res = diff(f,s,2)
+
     # line_List = [['aa', 'bb', 'cc'], ['dd', 'ee', 'ff'], ['gg', 'hh']]
     # num_list = [[69, 31, 98], [61, 97, 78] ]
     #
@@ -168,24 +314,24 @@ if __name__ == '__main__':
     # for num in numslist:
     #     print(num)
     #     print('*******\n')
-    G = nx.random_graphs.erdos_renyi_graph(100, 0.2)
-    N = 10
-    Nodes = list(G)
-    start_time = time.time()
-    for i in range(N):
-        source = random.choice(Nodes)
-        destination = random.choice(Nodes)
-        print('源节点为{}，宿节点为{}'.format(source, destination))
-        path = find_path(G, source, destination)
-        print('业务路径为{}'.format(path))
-
-    end_time = time.time()
-    print('for循环{}次的总耗时为{}s'.format(N, end_time-start_time))
-
-    t1 = time.time()
-    multi_threading_func(N, G)
-    t2 = time.time()
-    print('多线程并发{}次的总耗时为{}s'.format(N, t2-t1))
+    # G = nx.random_graphs.erdos_renyi_graph(100, 0.2)
+    # N = 10
+    # Nodes = list(G)
+    # start_time = time.time()
+    # for i in range(N):
+    #     source = random.choice(Nodes)
+    #     destination = random.choice(Nodes)
+    #     print('源节点为{}，宿节点为{}'.format(source, destination))
+    #     path = find_path(G, source, destination)
+    #     print('业务路径为{}'.format(path))
+    #
+    # end_time = time.time()
+    # print('for循环{}次的总耗时为{}s'.format(N, end_time-start_time))
+    #
+    # t1 = time.time()
+    # multi_threading_func(N, G)
+    # t2 = time.time()
+    # print('多线程并发{}次的总耗时为{}s'.format(N, t2-t1))
 
 
 

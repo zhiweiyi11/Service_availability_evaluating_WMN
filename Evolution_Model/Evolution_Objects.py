@@ -7,6 +7,7 @@
 @Date   ：2023/3/6 14:36
 @Desc   ：建模无线网络演化对象
 =================================================='''
+import copy
 import os.path
 
 import networkx as nx
@@ -16,6 +17,7 @@ import random
 import math
 import time
 import datetime
+import re as replace
 
 import pandas as pd
 
@@ -24,6 +26,9 @@ import PIL # 导入计算机网络的图标
 
 from Evolution_Model.Application_request_generating import *
 from Evolution_Model.Network_position_generating import *
+from Evolution_Model.Evolution_Rules import k_shortest_paths
+# from sympy import *
+from sympy import exp, symbols, diff
 
 def calculate_distance(node1, node2):
   """Calculate the Euclidean distance between two nodes."""
@@ -33,10 +38,17 @@ def calculate_distance(node1, node2):
   y2 = node2[1]
   return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
+def saveDataFrameToExcel(df: pd.DataFrame, fileName: str):
+    time = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')
+    # df.to_excel(r'..\Results_Saving\{}_time_{}.xlsx'.format(fileName, time), index=False)
+    df.to_excel(r'..\Results_Saving\{}.xlsx'.format(fileName), index=False)
 
-def generate_positions(NB_nodes, Area_width, Area_length):
+    print('成功保存数据文件 \n')
+
+
+def generate_positions(NB_nodes, Area_width, Area_length, save_data):
     # 根据区域范围，生成节点的坐标
-    save_data = False
+    # save_data = False
     pos_x = np.random.uniform(0, Area_width, NB_nodes)
     pos_y = np.random.uniform(0, Area_length, NB_nodes)
     # 将横纵坐标进行合成为array, 生成节点坐标的阵列
@@ -46,84 +58,87 @@ def generate_positions(NB_nodes, Area_width, Area_length):
     # network_coordinates = np.concatenate((sink_coordinates, sensor_coordinates),axis=0)
     # 保存网络节点的坐标数据为excel
     df = pd.DataFrame(Node_coordinates)
-    time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')  # 记录数据存储的时间
+    # Plotting
+    plt.scatter(pos_x, pos_y, edgecolor='b', facecolor='none', alpha=0.5)
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.show()
+
+    # time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')  # 记录数据存储的时间
     if save_data == True:
         path2 = os.path.abspath('..') # 表示当前所处的文件夹上一级文件夹的绝对路径
-        with pd.ExcelWriter(path2 + r'.\Results_Saving\Node_Coordinates_created_from_{}.xlsx'.format(time2)) as writer:
+        with pd.ExcelWriter(path2 + r'.\Results_Saving\Node_Coordinates_{}_Uniform.xlsx'.format(NB_nodes)) as writer:
             df.to_excel(writer, sheet_name='Node_Coordinates')
             print("数据成功保存")
+
     return Node_coordinates
 
-def generate_mesh(width, height, unit):
-    """
-    将一个矩形区域划分为更细致的网格
-    :param width: 区域的宽度
-    :param height: 区域的高度
-    :param unit: 网格边长，假设以正方形为最小单位进行划分
-    :return: 节点坐标
-    """
-    x = []
-    y = []
-    res = []
+def function_SINR(s, d_ij, d_interferer_list, noise_power):
+    m = 4 # 衰落系数的形状参数
+    gamma = 1 # SINR阈值
+    W = noise_power # 0.0001
+    # d_ij = 20
+    # d_interferer_list = [35]
+    alpha = 2
+    Pt = 1.5
+    # s = symbols('s', real=True)
+    k = (m * gamma * W) / (Pt*pow(d_ij, -alpha))
 
-    for i in range(0, width + unit, unit):
-        x.append(i)
+    y1 = 1
+    for d_vj in d_interferer_list:
+        b = gamma * pow((d_vj / d_ij), -alpha)
+        y1 *= pow( (1+s*b), -m)
+    y2 = exp(-k*s)  * y1
 
-    for i in range(0, height + unit, unit):
-        y.append(i)
+    return y2
 
-    for i in range(0, len(x)):
-        for j in range(0, len(y)):
-            temp = []
-            temp.append(x[i])
-            temp.append(y[j])
-            res.append(temp)
 
-    return res
+def calculate_SINR_outage_probability(m, d_ij, d_interferer_list, noise_power):
+    '''
+    # 计算基于SINR的链路故障率
+    :param gamma: SINR 阈值, 通常为1
+    :param W / noise_power: 噪声功率, 0.0001 W
+    :param alpha: 路损指数, 在[2,6]之间取值
+    :param m: 衰落系数的形状参数, 4
+    :param d_ij: 链路(v_i, v_j)的距离
+    :param d_interferer_list: 干扰节点的距离集合
+    :return:
+    # 链路的中断概率主要受到3个参数的影响:噪声功率、路损指数、干扰链路的数量和距离
+    # 当不存在干扰节点时,主要是噪声功率和路损指数影响;当前考虑干扰节点时, 主要受到干扰节点的距离影响,而且当干扰链路越多 或 距离<链路本身的距离时,链路故障率越高(0.99)
+    '''
+    res = 0
+    s = symbols('s', real= True)
+    for n in range(m):
+        aa = pow(-1, n)/np.math.factorial(n)
+        # print('aa is {}'.format(aa))
+        bb = diff(function_SINR(s, d_ij, d_interferer_list, noise_power), s , n).subs({s:1})
+        # print('bb is {}'.format(bb))
+        res += aa*bb
+    outage_probability = 1- res
 
-def get_edges_from_mesh(coordinates, unit) -> []:
-    """
-    将mesh中相邻的坐标形成边
-    :param coordinates: mesh坐标集合
-    :param unit: mesh的最小放个边长
-    :return: 具有连边的节点的序号对
-    """
-    edges_list = []
-
-    for i in range(len(coordinates)):
-        for j in range(len(coordinates)):
-            distance = calculate_distance(coordinates[i], coordinates[j])
-            if (distance == unit):
-                edges_list.append((i, j))
-
-    for i in range(len(edges_list)):
-        for j in range(i + 1, len(edges_list)):
-            x_i = edges_list[i][0]
-            y_i = edges_list[i][1]
-            x_j = edges_list[j][0]
-            y_j = edges_list[j][1]
-            if (x_i == y_j and y_i == x_j):
-                del edges_list[j]
-                break
-
-    return edges_list
+    return outage_probability
 
 
 class Network(nx.Graph): # 表示继承为nx.Graph的子类
     ''' 存储所有的节点及拓扑信息，以及对节点进行操作的方法'''
 
-    def __init__(self, topology, Num_Nodes, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_file):
+    def __init__(self, topology, TX_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_file, file_name):
         self.transmit_power = transmit_power # 节点的发射功率
         self.path_loss = path_loss
         self.noise = noise
         self.bandwidth = bandwidth
+        self.transmit_prob = TX_prob
+        self.node_neighbours = {} # 网络节点的邻居节点集合
+        self.node_neighbours_dis = {} # 网络节点到邻居节点的距离集合
 
-        if topology == 'Star': # 按星型拓扑部署节点
+        if topology == 'Tree': # 按星型拓扑部署节点
             nx.Graph.__init__(self)
-            G =  nx.star_graph(Num_Nodes+1)
+            r = 3
+            h = 3
+            G =  nx.balanced_tree(r, h) # r:each node will have r children; h: height of tree
             self.update(G)
 
-        if topology == 'Grid': # 随机部署节点
+        if topology == 'Random_SINR': # 随机部署节点
             # 创建二维网络（mesh）图
             nx.Graph.__init__(self)
             G = nx.Graph()
@@ -132,50 +147,131 @@ class Network(nx.Graph): # 表示继承为nx.Graph的子类
 
             # 如果是从文件中导入节点坐标
             if import_file == True:
-                sys_path = os.path.abspath('..')  # 表示当前所处文件夹上一级文件夹的绝对路径
-                Node_coord = pd.read_excel(io=sys_path + r".\Results_Saving\Node_Coordinates_Mesh_Test.xlsx", sheet_name=0,
-                                           index_col=0)  # 读取第1个sheet的数据,不把表格的行索引读入进来
-                print('读取节点坐标数据成功')
+                # sys_path = os.path.abspath('..')  # 表示当前所处文件夹上一级文件夹的绝对路径
+                Edges_info = pd.read_excel( r"..\Results_Saving\{}.xlsx".format(file_name), sheet_name=0, index_col=0)  # 读取第1个sheet的数据,不把表格的行索引读入进来
+                print('读取网络链路的数据成功')
                 ################### 这部分需要根据导入的数据格式进行完善 ###################
+                for i in range(len(Edges_info.index)):
+                    edge_str = Edges_info.index[i]
+                    edge = replace.findall(r'\d+', edge_str) # 采用正则表达式，将df中读取的链路节点对的字符串中的数字提取出来
+                    edge = list(map(int, edge))
+                    distance = Edges_info.iloc[i]['distance']
+                    capacity = Edges_info.iloc[i]['capacity']
+                    fail_rate = Edges_info.iloc[i]['fail_rate']
+                    weight = 1 - fail_rate
 
-            # 如果是直接传入节点坐标
+                    G.add_edge(*edge, dis=distance, capacity=capacity,load=0, fail_rate=fail_rate,  app_dp=[], weight=weight)
+                self.update(G)
+                self.set_node_attributes(Coordinates)  # 设置节点的属性
+
+            else:  # 基于SINR来生成网络链路
+                nx.Graph.__init__(self)
+                G = nx.Graph()
+                edges_list, edges_dis = [], []
+                large_link_num = 0
+                for i in range(len(Coordinates)):
+                    neighbours, neighbours_dis = [], []  # 存储各节点的邻居节点以及对应距离
+                    for j in range(len(Coordinates)):
+                        if j == i:  # 避免将节点到自己的距离计算进去
+                            continue
+                        else:
+                            distance = self.nodes_distance(Coordinates[i], Coordinates[j])
+                            if distance <= TX_range: # 修改这里的判断
+                                edges_list.append((i, j))
+                                edges_dis.append(distance)
+                                neighbours.append(j)  # 将节点i加入至其邻居节点中
+                                neighbours_dis.append(distance)
+                    self.node_neighbours[i] = neighbours
+                    if len(neighbours) > 10:
+                        large_link_num += 1
+                        print('邻居节点个数大于10的链路为{}'.format(edges_list[-1]))
+                    self.node_neighbours_dis[i] = neighbours_dis
+                print('邻居节点个数大于10的链路总数为{} \n'.format(large_link_num))
+
+                for k in range(len(edges_list)):  # 生成网络拓扑图
+                    noise_power = self.bandwidth * self.noise
+                    print('噪声功率为{}'.format(noise_power))
+                    d_ij = edges_dis[k]
+                    ts, rc = edges_list[k]  # 找出链路的节点对
+                    SINR_ij, interfere_node_ij = self.calculate_SINR(ts, rc, self.transmit_prob)
+                    SINR_ji, interfere_node_ji = self.calculate_SINR(rc, ts, self.transmit_prob)
+                    capacity = 1 / 2 * (self.bandwidth * math.log((1 + SINR_ij), 2) + self.bandwidth * math.log((1 + SINR_ji),2)) / 1000000  # 转换为Mbps
+                    fail_rate_ij = calculate_SINR_outage_probability(4, d_ij, interfere_node_ij, noise_power)
+                    fail_rate_ji = calculate_SINR_outage_probability(4, d_ij, interfere_node_ji, noise_power)
+                    fail_rate = 1 / 2 * (fail_rate_ij + fail_rate_ji)
+                    print('链路的中断概率为{}\n'.format(fail_rate))
+                    weight = 1 - fail_rate
+                    G.add_edge(*edges_list[k], dis=d_ij, capacity=capacity, load=0, fail_rate=fail_rate, app_dp=[], weight=weight)  # 设置链路故障率为距离的函数
+
+                self.update(G)
+                self.set_node_attributes(Coordinates)  # 设置节点的属性
+
+        # elif topology =='Random': # 如果为随机拓扑的话，则从节点坐标中生成网络链路
+        #     nx.Graph.__init__(self)
+        #     G = nx.Graph()
+        #     # 计算小于节点范围内的连接链路
+        #     edges_list, edges_dis = [], []
+        #     for i in range(len(Coordinates)):
+        #         for j in range(i + 1, len(Coordinates)):
+        #             distance = self.nodes_distance(Coordinates[i], Coordinates[j])
+        #             if distance <= TX_range:
+        #                 edges_list.append((i, j))
+        #                 edges_dis.append(distance)
+        #
+        #     for k in range(len(edges_list)):  # 生成网络拓扑图
+        #         d = edges_dis[k]
+        #         fail_rate = self.link_failure_probability(d, r_th=50, phi=1.5)  # r_th, phi的取值越大，失效率越低, d越大，故障率越高
+        #         capacity = self.link_capacity(d)
+        #         # weight = self.link_weight(fail_rate, 0, capacity)  # 初始时各链路上的负载为0
+        #         weight = 1- fail_rate # 假设链路的权重为 1- 故障率
+        #         G.add_edge(*edges_list[k], dis=d, capacity=capacity, load=0, fail_rate=fail_rate,  app_dp=[], weight=weight)  # 设置链路故障率为距离的函数
+        #
+        #     self.update(G)
+        #     self.set_node_attributes(Coordinates)  # 设置节点的属性
+
+
+
+    def calculate_SINR(self, transmit_node_id, receive_node_id, transmit_prob):
+        # 计算链路的SINR
+        interference = 0
+
+        index = self.node_neighbours[transmit_node_id].index(receive_node_id)
+        distance = self.node_neighbours_dis[transmit_node_id][index] # 获取节点对之间的距离
+        print('链路的距离为{}'.format(distance))
+
+        interfereNodeIdList = self.node_neighbours[receive_node_id]
+        interfereDistanceList = self.node_neighbours_dis[receive_node_id]
+
+        ''' 这里基于二项分布生成实际的干扰节点集合,即干扰节点的数量为一个随机变量'''
+        # random_list = np.random.binomial(1, transmit_prob, len(interfereNodeIdList))
+        # 干扰节点总数量为二项分布的期望值, 具体的节点为从干扰节点集合中随机选取 N_I个节点
+        num_I = int((len(interfereNodeIdList)-1)*transmit_prob) # 干扰节点的数量需要减去当前的接收节点
+        current_interfere_node = random.sample(interfereNodeIdList, num_I)
+        print('当前的干扰节点为{} '.format(current_interfere_node))
+
+        current_interfere_dis = [] # 当前实际的干扰节点的距离
+        for i in current_interfere_node:
+            if i == transmit_node_id:
+                current_interfere_node.append(random.choice(interfereNodeIdList)) # 再从干扰节点list中随机选取一个加入到干扰节点集合中来
+                continue
             else:
-                # 由于最小单元的边长没有传入，所以在这计算最小单元的边长
-                mesh_unit = abs(Coordinates[0][1] - Coordinates[1][1])
+                index = interfereNodeIdList.index(i)
+                current_interfere_dis.append(interfereDistanceList[index])
 
-                edges_list = get_edges_from_mesh(Coordinates, mesh_unit)
+        print('当前的干扰链路距离为{} '.format(current_interfere_dis))
 
-                # 根据距离d、r_th、phi来计算边的故障率
-                fail_rate = self.link_failure_probability(mesh_unit, r_th=50, phi=1.5)
-                capacity = self.link_capacity(mesh_unit)
-                weight = self.link_weight(fail_rate, 0, capacity)  # 初始时各链路上的负载为0
 
-                for k in range(len(edges_list)):
-                    G.add_edge(*edges_list[k], dis=mesh_unit, capacity=capacity,load=0, fail_rate=fail_rate,  weight=weight)
-            self.update(G)
+        for i in range(len(current_interfere_dis)): # 计算干扰的总功率
+            interference += self.transmit_power * pow(interfereDistanceList[i], -self.path_loss)
 
-        if topology =='Random': # 如果为随机拓扑的话，则从节点坐标中生成网络链路
-            nx.Graph.__init__(self)
-            G = nx.Graph()
-            # 计算小于节点范围内的连接链路
-            edges_list, edges_dis = [], []
-            for i in range(len(Coordinates)):
-                for j in range(i + 1, len(Coordinates)):
-                    distance = self.nodes_distance(Coordinates[i], Coordinates[j])
-                    if distance <= TX_range:
-                        edges_list.append((i, j))
-                        edges_dis.append(distance)
+        Pr = self.transmit_power * pow(distance, -self.path_loss) # 节点的接收功率
 
-            for k in range(len(edges_list)):  # 生成网络拓扑图
-                d = edges_dis[k]
-                fail_rate = self.link_failure_probability(d, r_th=50, phi=1.5)  # r_th, phi的取值越大，失效率越低, d越大，故障率越高
-                capacity = self.link_capacity(d)
-                # weight = self.link_weight(fail_rate, 0, capacity)  # 初始时各链路上的负载为0
-                weight = 1- fail_rate # 假设链路的权重为 1- 故障率
-                G.add_edge(*edges_list[k], dis=d, capacity=capacity, load=0, fail_rate=fail_rate,  app_dp=[], weight=weight)  # 设置链路故障率为距离的函数
+        sum_ = self.noise * self.bandwidth + interference # 这里主要考虑了噪声的功率谱密度
 
-            self.update(G)
-            self.set_node_attributes(Coordinates)  # 设置节点的属性
+        SINR = Pr / sum_
+        # print('链路{}的SINR为{}'.format((transmit_node_id, receive_node_id),SINR))
+
+        return SINR, current_interfere_dis
 
     def link_failure_probability(self, r, r_th, phi):
         # 计算链路的失效概率
@@ -207,6 +303,26 @@ class Network(nx.Graph): # 表示继承为nx.Graph的子类
         for n in list(self):
             node_attrs = {n: {'alive': 1,'pos': Coordi[n], 'app_dp':[] }}
             nx.set_node_attributes(self, node_attrs)
+
+    def generate_link_state(self):
+        # 根据各链路的故障率，生成链路的状态
+        edges_list = list(self.edges)
+        random_number_list = np.random.rand(len(edges_list)) # 根据链路的数量生成一个随机数组
+        failed_link_num = 0 # 统计当前演化下故障的链路总数
+        for i in range(len(random_number_list)):
+            edge = edges_list[i]
+            random_number = random_number_list[i]
+            link_fail_rate = self.adj[edge[0]][edge[1]]['fail_rate']
+            link_weight = self.adj[edge[0]][edge[1]]['weight']
+            if random_number < link_fail_rate: # 此时链路发生了随机故障
+                self.adj[edge[0]][edge[1]]['weight'] = float('inf')
+                failed_link_num += 1
+            elif link_weight == float('inf'): # 如果原链路本来就中断了,则仍然设置其链路权重为inf
+                self.adj[edge[0]][edge[1]]['weight'] = float('inf')
+            else:
+                self.adj[edge[0]][edge[1]]['weight'] = 1
+        print('当前演化态下链路中断的总数为{}'.format(failed_link_num))
+
 
     def draw_topo(self, coordinates):
         # 根据节点的坐标绘制网络的拓扑结构图
@@ -261,6 +377,9 @@ class App(object):
                     app_list.append(self.id)  # 元组中前面的表示业务的id，后面的表示业务对应的子路径index
                     G.adj[self.path[i]][self.path[i + 1]]['app_dp'] = app_list  # 更新链路的业务部署信息
                     G.adj[self.path[i]][self.path[i + 1]]['load'] += self.load # 仅将业务当前的负载加至链路上
+                    available_cap = G.adj[self.path[i]][self.path[i + 1]]['capacity'] - G.adj[self.path[i]][self.path[i + 1]]['load']
+                    if available_cap < 0:
+                        print('当前业务id {}的负载{}部署导致链路{}过载,链路的信息为{}'.format(self.id,self.load, (self.path[i], self.path[i+1]), G.adj[self.path[i]][self.path[i + 1]]))
             else:
                 break
 
@@ -310,6 +429,28 @@ class App(object):
         else:
             print('业务待卸载{}的路径是空集'.format(self.id))
 
+
+def generate_app_path(G, source, destination, app_demand):
+    # 根据业务的源宿节点和业务请求计算服务带宽的业务路径
+    K = 10
+    G_sample = copy.deepcopy(G)
+    bottleneck_link = []
+    app_path = []
+    # print('重路由计算得到的候选路径集为{}'.format(new_subpath_optional))
+    while True:
+        optional_path = nx.shortest_path(G_sample, source, destination, 'weight')
+
+        new_path, bottleneck_link = link_capacity_allocation(G_sample, optional_path, app_demand)
+        if new_path:
+            app_path = new_path
+            break
+        else:
+            for link in bottleneck_link:
+                G_sample.adj[link[0]][link[1]]['weight'] = float('inf')
+
+    return app_path
+
+
 def link_capacity_allocation(G,  candidate_path, app_demand):
     '''
     # 网络的链路带宽分配规则
@@ -321,10 +462,12 @@ def link_capacity_allocation(G,  candidate_path, app_demand):
     '''
     app_path = []
     link_load_path = [] # 记录业务候选路径上的链路剩余可用容量
+    bottleneck_link = []
     for i in range(len(candidate_path)-1):
         link_available_cap = G.adj[candidate_path[i]][candidate_path[i+1]]['capacity'] - G.adj[candidate_path[i]][candidate_path[i+1]]['load']
         if link_available_cap < app_demand:
             link = (candidate_path[i], candidate_path[i+1])
+            bottleneck_link.append(link)
             print('瓶颈链路为{},剩余带宽为{}'.format(link, link_available_cap))
         link_load_path.append(link_available_cap)
 
@@ -333,7 +476,7 @@ def link_capacity_allocation(G,  candidate_path, app_demand):
     if capacity_available >= app_demand:
         app_path = candidate_path # 如果当前链路满足业务的带宽需求，则将该路径选择为业务的新路径
 
-    return app_path
+    return app_path, bottleneck_link
 
 def RecursionFunc(arr1,arrList):
     # 递归函数，从arrList中各取出一个元素，并进行组合
@@ -362,12 +505,18 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
     App_dict = {}
     random.shuffle(App_Priority) # 将制定业务等级的list打乱，但是各等级的数量仍然不变
     TrafficDensity = generateAppTraffic(Area_width, Area_length, grid_size, traffic_th)
+    App_coordinates, App_demand = generateAppOD_from_grid(TrafficDensity[0], App_num) # 根据各网格上的流量密度和业务请求的数量,找到业务请求对应的od和demand
+    df = pd.DataFrame(columns=['coordinates', 'demand'])
+    # 将业务流量请求的数据保存下来
+    for i in range(len(App_demand)):
+        coord = App_coordinates[i]
+        demand = App_demand[i]
+        df.loc[i] = [coord, demand]
+    saveDataFrameToExcel(df, 'AppTraffic_200_SINR')
 
-
-    for i in range(App_num):
+    for i in range(len(App_coordinates)):
         #　随机选择2个不重复的网格节点来作为业务的od对
         app_od_coord = random.sample(TrafficDensity[0].keys(), 2)
-        App_coordinates = {} # 存储业务坐标信息的字典
         # od_list = []
         while True:
             App_coordinates[i] = app_od_coord
@@ -381,7 +530,7 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
                 app_od_coord = random.sample(TrafficDensity[0].keys(), 2)
 
         priority = random.choice(App_Priority)
-        demand = App_Demand[i]
+        demand = App_demand[i] # 业务的流量从密度矩阵中生成
         strategy = App_Strategy[i]
 
         while True:
@@ -390,8 +539,9 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
             source = tmp_od[0]
             destination = tmp_od[1]
             # 加入约束，保证业务路径是多跳的(业务的接入和退出节点不能相同)
-            path_tmp = nx.shortest_path(G, source, destination, 'weight') # 找包含业务源宿节点图G中一条最短路径作为业务的初始路径
-            app_path= link_capacity_allocation(G, path_tmp, demand) # 根据链路的容量来确定业务是否部署在该路径上
+            # path_tmp = nx.shortest_path(G, source, destination, 'weight') # 找包含业务源宿节点图G中一条最短路径作为业务的初始路径
+            # app_path= link_capacity_allocation(G, path_tmp, demand) # 根据链路的容量来确定业务是否部署在该路径上
+            app_path = generate_app_path(G, source, destination, demand)
             if app_path:
                 app = App(i, access, exit, app_path, demand, priority, strategy)
                 print('业务{}的初始路径为{}'.format(i, app_path))
@@ -408,12 +558,7 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
 
     return G, App_dict
 
-def saveDataFrameToExcel(df: pd.DataFrame, fileName: str):
-    time = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')
-    # df.to_excel(r'..\Results_Saving\{}_time_{}.xlsx'.format(fileName, time), index=False)
-    df.to_excel(r'..\Results_Saving\{}.xlsx'.format(fileName), index=False)
 
-    print('成功保存数据文件 \n')
 
 def load_AppInfoFromExcel(fileName: str) -> dict:
     """
@@ -447,7 +592,7 @@ def load_AppInfoFromExcel(fileName: str) -> dict:
 
     return AppDict
 
-def init_function_from_file(Coord_file, AppDict_file, Network_parameters, Wireless_parameters, Loss_parameters):
+def init_function_from_file(Topology_file, Coord_file, AppDict_file, Network_parameters, Wireless_parameters, Loss_parameters):
     # 从文件中初始化网络和业务对象
     Node_coord = pd.read_excel(io= "..\Results_Saving\{}.xlsx".format(Coord_file), sheet_name=0, index_col=0)  # 读取第1个sheet的数据,不把表格的行索引读入进来
     print('读取节点坐标数据成功')
@@ -455,10 +600,11 @@ def init_function_from_file(Coord_file, AppDict_file, Network_parameters, Wirele
     for n in Node_coord.index: # 将dataframe中存储的节点坐标转换为 dict格式
         Coordinates[n] = Node_coord.loc[n].to_list()
 
-    Topology, Node_num = Network_parameters[0], Network_parameters[1]
+    Topology, TX_prob = Network_parameters[0], Network_parameters[1]
     TX_range, transmit_power, bandwidth = Wireless_parameters[0], Wireless_parameters[1], Wireless_parameters[2]
     path_loss, noise = Loss_parameters[0], Loss_parameters[1]
-    G = Network(Topology, Node_num, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_file=False)
+    G = Network(Topology, TX_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, True, Topology_file)
+    G.draw_topo(Coordinates)
 
     AppDict = load_AppInfoFromExcel(AppDict_file)
 
@@ -472,53 +618,82 @@ def init_function_from_file(Coord_file, AppDict_file, Network_parameters, Wirele
 if __name__ == '__main__':
     # 参考现有的WSN仿真器的代码，完成WSN网络的构建
     # 完成网络的代码调试
-    import_file = False
+    save_data = True # 不保存节点坐标数据
     Node_num =  200
-    Topology = 'Random'
-    Area_size = (250, 200)
-    Area_width, Area_length = 250, 200
-    Coordinates = generate_positions(Node_num, Area_width, Area_length)
-
+    Topology = 'Random_SINR'
+    Area_size = (250, 250)
+    # Area_width, Area_length = 500,500# 250, 200
+    Coordinates = generate_positions(Node_num, Area_size[0], Area_size[1], save_data)
+    Coordinates_sample = generate_PPP_distribution(Area_size, Node_num, save_data) # 当节点传输半径较小时，通过增加节点的数量来保证网络的连通性
 
     # TX_range = 50 # 传输范围为区域面积的1/5时能够保证网络全联通
-    transmit_power = 15  # 发射功率(毫瓦)，统一单位：W
-    path_loss = 2.5  # 单位：无
-    noise = pow(10, -10)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
-    bandwidth = 20 * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz
-    lambda_TH = 8 * pow(10, -1)  # 接收器的敏感性阈值,用于确定节点的传输范围
-    TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss) # 传输范围为38.8
+    transmit_prob = 0.1 # 节点的数据发送概率
+    transmit_power = 1.5  # 发射功率(毫瓦)，统一单位：W
+    path_loss = 2  # 单位：无
+    noise = pow(10, -11)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
+    bandwidth = 10 * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz 10* pow(10, 6)
+    lambda_TH = 8 * pow(1, -1)  # 接收器的敏感性阈值,用于确定节点的传输范围
+    # TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss) # 传输范围为38.8
+    TX_range = 30 # 为了让整网链路的平均故障率低，需要将节点的传输范围设置较小值,并且增加节点的密度保证网络的拓扑连通性
     CV_range = 30 # 节点的覆盖范围
 
     # 业务请求的参数
     App_num = 100
     grid_size = 5
-    traffic_th = 0.5 # 业务网格的流量阈值
-    App_Demand = np.random.normal(loc= 3, scale=1, size=App_num) # 生成平均值为3，标准差为1的业务带宽请求的整体分布
-    App_Priority = [1,2,3]
+    traffic_th = 1 # 业务网格的流量阈值
+    App_Demand = np.random.normal(loc= 2, scale=1, size=App_num) # 生成平均值为3，标准差为1的业务带宽请求的整体分布
+    App_Priority = [1,2,3,4,5]
     ratio_str = 1 # 尽量分离和尽量重用的业务占比
     Strategy_P = ['Global'] * int(App_num*(1-ratio_str))
     Strategy_S = ['Local'] * int(App_num*ratio_str)
     App_Strategy = Strategy_S + Strategy_P
 
+    # 确定是否从文件导入数据
+    import_topology_file = False # 不从文件中导入拓扑数据
+    file_name = 'Topology_200_SINR'
+
     ## 这是初始随机生成网络及业务对象的代码
-    # G = Network(Topology, Node_num, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_file)
-    # G, Apps = init_func(G, Coordinates, Area_size, CV_range,  grid_size, traffic_th, App_num, App_Demand, App_Priority, App_Strategy)
+    G = Network(Topology, transmit_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_topology_file, file_name)
+    G, Apps = init_func(G, Coordinates, Area_size, CV_range,  grid_size, traffic_th, App_num, App_Demand, App_Priority, App_Strategy)
+    # #
+    Edges_info = {}
+    edges_list = list(G.edges)
+    for i in range(len(edges_list)):
+        edge_info = []
+        e = edges_list[i]
+        edge_info.append(e)
+        edge_info.append(G.edges[e[0], e[1]]['dis'])
+        edge_info.append(G.edges[e[0], e[1]]['capacity'])
+        edge_info.append(G.edges[e[0], e[1]]['fail_rate'])
+        Edges_info[i] = edge_info
+    save_GraphInfo(Edges_info, 'Topology_200_SINR')
+    save_AppInfo(Apps, 'App_200_SINR')
+    # # # Apps_load = load_AppInfoFromExcel('App_100_SINR')
+    # #
+    # # # # 保存网络拓扑和业务请求的数据至Excel
+    # df_coord = pd.DataFrame(Coordinates_sample)
+    # with pd.ExcelWriter(r'..\Results_Saving\Node_Coordinates_{}_SINR.xlsx'.format(Node_num)) as writer:
+    #     df_coord.T.to_excel(writer, sheet_name='Node_Coordinates')
+    #     print("数据成功保存")
     #
-    # # 保存网络拓扑和业务请求的数据至Excel
-    # save_AppInfo(Apps, 'App_100_randomTopo')
-    # Apps_load = load_AppInfoFromExcel('App_100_randomTopo')
-    Network_parameters = [Topology, Node_num]
+    #
+    # ''' 这里的代码用来测试从excel文件中导入'''
+    Network_parameters = [Topology, transmit_prob]
     Wireless_parameters = [TX_range, transmit_power, bandwidth]
     Loss_parameters = [path_loss, noise]
 
-    G, Apps = init_function_from_file('Node_Coordinates_100_randomTopo', 'App_100_randomTopo', Network_parameters, Wireless_parameters, Loss_parameters)
+    # G, Apps = init_function_from_file('Topology_150_SINR', 'Node_Coordinates_150_SINR','App_150_SINR', Network_parameters, Wireless_parameters, Loss_parameters)
 
     ave_link_fail = 0
+    num_efficient_link = 0
     for e in G.edges:
         link_fail = G.adj[e[0]][e[1]]['fail_rate']
         ave_link_fail += link_fail
+        if link_fail < 0.3:
+            num_efficient_link += 1
         # print('链路{}的故障率为{}'.format(e, link_fail))
     ave_link_fail = ave_link_fail/len(G.edges)
 
     print('整网链路的平均故障率为{}'.format(ave_link_fail))
+    print('网络的链路总数为{},有效的链路数为{}'.format(len(G.edges), num_efficient_link))
 

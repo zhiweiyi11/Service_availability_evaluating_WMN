@@ -17,9 +17,23 @@ from Evolution_Model.Evolution_Objects import *
 from Evolution_Model.Evolution_Conditions import cond_func
 from Evolution_Model.Application_request_generating import *
 
-def k_shortest_paths(k, G, source, target,  weight):
+def k_shortest_paths(k, G, source, target,  weight, strategy, original_path_length):
     # use this function to efficiently compute the k shortest/best paths between two nodes
-    return list(islice(nx.shortest_simple_paths(G, source, target, weight=weight), k)) # This procedure is based on algorithm by Jin Y. Yen [1]. Finding the first K paths requires O(K N^3) operations
+    candidate_paths = []
+    res = list(islice(nx.shortest_simple_paths(G, source, target, weight=weight), k)) # This procedure is based on algorithm by Jin Y. Yen [1]. Finding the first K paths requires O(K N^3) operations
+    if strategy == 'Local':
+        max_hop = 5
+        for p in res:
+            if len(p) <= max_hop:
+                candidate_paths.append(p)
+    else:
+        max_hop = original_path_length + 5
+        for p in res:
+            if len(p) <= max_hop:
+                candidate_paths.append(p)
+
+    return candidate_paths
+
 
 
 ## 构件故障下的网络以及业务的状态转变
@@ -29,17 +43,25 @@ def component_failure(G, Apps, fail_time, failed_component_list):
     for n in failed_component_list:
         G.nodes[n]['alive'] = 0  # 先将节点的状态设置为0，表示此时节点故障
         failed_app_id = G.nodes[n]['app_dp']
+        # print('节点{}上部署的业务为{}'.format(n, failed_app_id))
         apps_fault  += failed_app_id
         adj_nodes = list(G.adj[n])
         for adj in adj_nodes:
             G.adj[n][adj]['weight'] = float('inf')  # 将节点邻接的边的权重设置为无穷大
 
-    for app_id in apps_fault:
+    apps_removed = [] # 存储一个待移除的业务id集合
+    for app_id in apps_fault: #　避免将已经故障等待修复的业务加入重路由的业务集合中
+        # print('节点{}故障下其上部署的业务为{}'.format(failed_component_list, apps_fault))
         if Apps[app_id].fail_time == 0: # 表明上一时刻业务未发生故障
             Apps[app_id].fail_time = fail_time # 记录故障发生的起始时刻
+            # print('业务{}的故障时刻为{}'.format(app_id, fail_time))
         else:
-            apps_fault.remove(app_id) # 另一种操作逻辑是：当构件故障后,仅保留业务到该故障的构件映射，解除掉业务到其他健康构件的映射,这里需要进行app_undeploy_node的操作,同时，当业务修复后,在deploy回来
-            print('业务app {} 上一时刻{}已经发生了故障'.format(app_id, Apps[app_id].fail_time))
+            apps_removed.append(app_id) # 另一种操作逻辑是:当构件故障后,仅保留业务到该故障的构件映射，解除掉业务到其他健康构件的映射,这里需要进行app_undeploy_node的操作,同时,当业务修复后,再deploy回来
+            # print('业务app {} 上一时刻{}已经发生了故障'.format(app_id, Apps[app_id].fail_time))
+    # 最后统一移除节点的id(切记不能在for循环中对id进行移除)
+    for id in apps_removed:
+        apps_fault.remove(id)
+
     return apps_fault
 
 
@@ -57,14 +79,22 @@ def component_repair(G, Apps, App_interrupt, repair_time, repaired_component_lis
 
         for app_id in repaired_app_id:
             if app_id in App_interrupt: # 如果业务id是属于中断的业务集合，则对该业务进行修复
-                print('完成修复的app为{}\n'.format(app_id))
+                # print('完成修复的app为{} '.format(app_id))
                 repair_duration = repair_time - Apps[app_id].fail_time
-                # if repair_duration > 50:
-                #     print('repair duration is {}'.format(repair_duration))
-                #     print('业务的故障时刻为{}，修复时刻为{}'.format( Apps[app_id].fail_time, repair_time))
+                if repair_duration > 50:
+                    print('repair duration is {}'.format(repair_duration))
+                    print('业务的故障时刻为{}，修复时刻为{}'.format( Apps[app_id].fail_time, repair_time))
                 Apps[app_id].fail_time = 0  # 表示业务成功恢复上线
                 Apps[app_id].outage['repair'].append(repair_duration)
-                App_interrupt.remove(app_id)
+                if Apps[app_id].down_time > 0 :# 若上一时刻业务处于降级状态(这种情况发生于故障检测不成功的业务)
+                    load = Apps[app_id].load
+                    duration = repair_time - Apps[app_id].down_time
+                    Apps[app_id].down_time = 0
+                    Apps[app_id].outage['degradation'].append({load:duration})
+
+                # print('移除的业务id为{}'.format(app_id))
+                App_interrupt.remove(app_id) # 可能是这里移除节点操作有问题(是前面component_failure函数中对一个正在遍历for循环的对象进行remove有问题)
+                # print('中断的业务集合为{}'.format(App_interrupt))
 
     return App_interrupt
 
@@ -87,7 +117,7 @@ def app_fault_detect(detection_successful_probability, failed_service_list):
     return successful_app_list, unsuccessful_app_list
 
 # 路由规则
-def path_reroute(G, app_access, app_exit, app_path,  app_strategy, node_fail_list, recovery_parameters):
+def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, node_fail_list, recovery_parameters):
     '''
     # 网络的重路由规则
     :param G: 当前网络的拓扑结构
@@ -102,6 +132,7 @@ def path_reroute(G, app_access, app_exit, app_path,  app_strategy, node_fail_lis
     # 根据recovery model计算重路由时长的参数
     message_processing_time, path_calculating_time, rerouting_app_num = recovery_parameters[0], recovery_parameters[1], recovery_parameters[2]
     new_app_path = [] # 业务重路由的候选路径集合
+    new_app_load = 0
     reroute_duration = 0
     source = app_path[0]
     destination = app_path[-1]
@@ -152,8 +183,9 @@ def path_reroute(G, app_access, app_exit, app_path,  app_strategy, node_fail_lis
             destination = random.choice(app_exit)
         # 计算新的业务路径
         # new_app_path = nx.shortest_path(G_sample, source, destination, 'weight')
-        new_app_path_optional = k_shortest_paths(K, G_sample, source, destination,  'weight')
-        new_app_path = find_available_path(G_sample, new_app_path_optional, node_fail_list[0])
+        original_path_length = len(app_path)
+        new_app_path_optional = k_shortest_paths(K, G_sample, source, destination,  'weight', app_strategy, original_path_length)
+        new_app_path, new_app_load = find_available_path(G_sample, app_demand, new_app_path_optional, node_fail_list[0])
         if new_app_path: # 如果路径存在
             reroute_duration = (rerouting_app_num + (fail_node_index + 1) + 2 * len(new_app_path)) * message_processing_time + rerouting_app_num * path_calculating_time
 
@@ -205,16 +237,17 @@ def path_reroute(G, app_access, app_exit, app_path,  app_strategy, node_fail_lis
 
         # 在计算子路径之前，将现有的可用节点的相邻链路的权重设置为无穷
         for n in app_path:
-            if G_sample.nodes[n]['alive'] == 1 and n != source and n!= destination:
-                # 将除了源宿节点外的其他节点的相邻链路都设置为inf,避免路由计算中加入这些节点
+            if n != source and n!= destination: # G_sample.nodes[n]['alive'] == 1
+                # 将除了源宿节点外的其他节点的相邻链路都设置为inf,避免路由计算中加入这些节点(还需要加入故障节点,因为主循环中对链路设置为inf可能没有传进来)
                 adj_nodes = list(G_sample.adj[n])
                 for adj in adj_nodes:
                     G_sample.adj[n][adj]['weight'] = float('inf')  # 将节点邻接的边的权重设置为无穷大
 
         # new_subpath = nx.shortest_path(G_sample, source, destination, 'weight')
-        new_subpath_optional = k_shortest_paths(K, G_sample, source, destination,  'weight')
+        original_path_length = len(app_path)
+        new_subpath_optional = k_shortest_paths(K, G_sample, source, destination,  'weight', app_strategy, original_path_length)
         # print('重路由计算得到的候选路径集为{}'.format(new_subpath_optional))
-        new_subpath = find_available_path(G_sample, new_subpath_optional, node_fail_list[0])
+        new_subpath = find_available_path(G_sample, app_demand, new_subpath_optional, node_fail_list[0]) # 这只能找到子路径上的路径带宽是否满足
         # print('最终选择的新路径为{} '.format(new_subpath))
         if new_subpath: # 如果路径存在
             if fail_node_index == 0 or fail_node_index == len(app_path)-1: # 如果故障节点为首/尾节点,则不对计算得到的新路径进行切片
@@ -256,8 +289,11 @@ def load_allocate(G, evo_time, app_new_path, app_demand, app_original_load, app_
         app_degradation_time = evo_time # 更新业务发生降级的时间
         # 进一步判断是初次降级还是连续降级
         if app_downtime > 0: # 判断上一时刻业务是否降级
-            degradation_load = app_original_load
+            degradation_load = app_original_load # 记录上一时刻的业务负载为降级的负载
             app_degradation[degradation_load] = evo_time - app_downtime
+            print('业务的降级时长为{}'.format(app_degradation))
+            if evo_time - app_downtime > 100:
+                print('当前演化时刻为{},业务上一降级的时刻为{}'.format(evo_time, app_downtime))
     else:
         app_degradation_time = 0
 
@@ -279,11 +315,16 @@ def app_degradation(evo_time, app_demand, app_original_load, app_allocated_load,
 
     return app_degradation, app_degradation_time
 
-def find_available_path(G, path_list, fail_node):
-    # 从K最短路集合中找出一条满足业务带宽需求的路径
+def find_available_path(G, app_demand, path_list, fail_node):
+    # First-fit策略：从K最短路集合中找出第一条满足业务带宽需求的路径
+    # 如果所有候选路径均不满足业务的带宽需求，则随机选择一条路径作为available＿path
     available_path = []
+    available_load = 0
+    # print('业务的候选路径集合为{},故障节点为{}'.format(path_list, fail_node))
+    removed_path = []
     for path in path_list:
         if fail_node in path: # 如果故障节点在新计算出来的路径中，则直接跳过该路径
+            removed_path.append(path)
             continue
         else:
             flag = len(path)-1
@@ -293,18 +334,32 @@ def find_available_path(G, path_list, fail_node):
                 link_available_cap = G.adj[path[i]][path[i + 1]]['capacity'] - G.adj[path[i]][path[i + 1]]['load']
                 link_load_path.append(link_available_cap)
                 weight = G.adj[path[i]][path[i + 1]]['weight'] # 排除掉那些最短路计算出来为中断的链路
-                if link_available_cap < 0.01 or weight == float('inf'): # 如果路径剩余可用带宽小于0，则跳出循环寻找下一条路径
-                    break
+                if link_available_cap < 0.05 or weight == float('inf'): # 如果路径剩余可用带宽小于0，则跳出循环寻找下一条路径
+                    # 这里主要的问题是 有的链路上的负载超过了容量,有的链路的权重为inf也被计算进来了
+                    # print('路径{}计算错误,链路{}的权重为{},链路的剩余可用带宽为{}'.format(path, (path[i],path[i+1]),weight, link_available_cap))
+                    removed_path.append(path) # 在路径集合中移除该错误路径,最后再对移除的path_list进行操作
+                    break # 跳出当前循环
                 else:
                     index += 1
-            if index == flag: # 如果索引到该path中的最后一条链路仍然有可用的带宽的话，则终止循环，输出该路径为业务的路径
-                available_path += path
-                # print('计算得到的可用的路径为{}'.format( available_path ))
-                # path_load = min(link_load_path)
-                # print('路径的最小容量为{} \n '.format(path_load))
+
+            if index == flag and min(link_load_path) > app_demand: # 如果索引到该path中的最后一条链路仍然有可用的带宽的话，则终止循环，输出该路径为业务的路径
+                available_path = path  # 找到可用路径后跳出循环
                 break
+                # print('计算得到的可用的路径为{}'.format( available_path ))
+    # print('待移除的业务路径为{}'.format(removed_path))
+
+    for l in removed_path:
+        path_list.remove(l)# 将计算错误的路径移除出去
+
+    if not available_path and path_list: # 如果业务的可用带宽仍然为空(即所有的子路径均不满足业务的带宽需求)
+        available_path = random.choice(path_list)
+    #     print('当前剩余可用的路径集合为{}'.format(path_list))
+    #     print('随机选择的业务路径为{}'.format(available_path))
+    #
+    # print('业务选择的路径为{}'.format(available_path))
 
     return available_path
+
 
 
 
@@ -336,7 +391,7 @@ def app_load_allocating(G, Apps, app_id, app_new_path):
         App_allocated_load[app_id] = app_demand
     else:
         # 如果剩余可用容量不足，则根据瓶颈链路上部署的业务来进行缩放
-        # print('瓶颈链路为{}'.format(bottleneck_link))
+        print('瓶颈链路为{}'.format(bottleneck_link))
 
         for e in bottleneck_link: # 依次遍历各瓶颈链路上的业务，对各业务的分配负载进行缩放
             link_capacity = G.adj[e[0]][e[1]]['capacity']
@@ -350,6 +405,7 @@ def app_load_allocating(G, Apps, app_id, app_new_path):
                 app_scaling_factor = [(1 - k) / (1 + k) for k in app_scaling]
                 app_new_load = [x * y for x, y in zip(app_original_load, app_scaling_factor)]  # 计算调整后的各业务负载
                 if sum(app_new_load) <= link_capacity:  # 如果调整后业务的负载满足链路的容量约束, 则更新业务子路径上的负载
+                    print('当前计算得到的链路{}上的业务负载分配为{}'.format(e, app_new_load ))
                     # G.adj[e[0]][e[1]]['load'] = sum(app_new_load)  # 更新链路的负载为缩放业务带宽后的负载(这一步骤转移至主函数的app_deploy_edge中)
                     for i in range(len(app_list)):
                         # 比较当前的业务负载和原有的业务负载的值的大小，如果小于，则更新App中对应子路径的业务负载值,并同时更新对应链路的负载值
@@ -358,8 +414,11 @@ def app_load_allocating(G, Apps, app_id, app_new_path):
                             current_app_load = App_allocated_load[app_list[i]]
                             if current_app_load > app_new_load[i]: # 仅当当前链路上分配给业务的load大于之前所分配的load，才对业务的最终分配load进行更新
                                 App_allocated_load[app_list[i]] = app_new_load[i]
+                                print('分配给业务{}的原负载为{}'.format( app_list[i], current_app_load))
+                                print('分配给业务{}的新负载为{}'.format(app_list[i], app_new_load[i]))
                         else:
                             App_allocated_load[app_list[i]] = app_new_load[i]
+                            print('重新分配负载的业务集合为{}'.format(App_allocated_load))
                     break
                 else:
                     app_original_load = app_new_load

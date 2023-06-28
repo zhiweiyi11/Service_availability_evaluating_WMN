@@ -15,6 +15,8 @@ import math
 import matplotlib.pyplot as plt
 import random
 
+import pandas as pd
+
 from Evolution_Model.Evolution_Objects import *
 
 
@@ -91,12 +93,19 @@ def generateAppOD_from_grid(AppTrafficDensity, App_num):
     :param App_num:
     :return: 业务的网格坐标以及源宿节点对
     '''
+    appTrafic = list(AppTrafficDensity)
     App_coordinates = {}
+    App_demand = {}
     for i in range(App_num):
-        app_od = random.sample(AppTrafficDensity.keys(), 2)
+        # 从appTrafficDensity中不重复抽取2个节点作为业务的od
+        app_od = random.sample(appTrafic, 2)
+        app_demand = 1/2 * (AppTrafficDensity[app_od[0]] + AppTrafficDensity[app_od[1]])
         App_coordinates[i] = app_od
+        App_demand[i] = app_demand
+        for od in app_od:
+            appTrafic.remove(od) # 移除掉已经选择的od对
 
-    return App_coordinates
+    return App_coordinates, App_demand
 
 
 def access_mapping(Node_coordinates, App_coordinates, CV_Range):
@@ -145,28 +154,39 @@ if __name__ == '__main__':
     App_num = 100
     Cap_node = 20
     Topology = 'Random'
-    Area_width, Area_length = 250, 150
+    Area_width, Area_length = 250, 250
     TX_range = 50 # 传输范围为区域面积的1/5时能够保证网络全联通
     CV_range = 30 # 节点的覆盖范围
     grid_size = 5
-    traffic_th = 0.5
+    traffic_th = 1
 
-    Coordinates = generate_positions(Node_num, Area_width, Area_length)
+    # Coordinates = generate_positions(Node_num, Area_width, Area_length)
+    #
+    # G = Network(Topology, Node_num, Coordinates, TX_range, True)
+    # Node_Coordinates = {} # 存储节点的坐标信息
+    # for n in list(G):
+    #     Node_Coordinates[n] = Coordinates[n]
+    # G.set_node_attributes( Node_Coordinates) # 每个节点的容量相同
 
-    G = Network(Topology, Node_num, Coordinates, TX_range, True)
-    Node_Coordinates = {} # 存储节点的坐标信息
-    for n in list(G):
-        Node_Coordinates[n] = Coordinates[n]
-    G.set_node_attributes(Cap_node, Node_Coordinates) # 每个节点的容量相同
+    TrafficDensity = generateAppTraffic(Area_width, Area_length, grid_size, traffic_th) # 生成业务流量分布,从网格中找到业务的请求
+    App_coordinates, App_demand = generateAppOD_from_grid(TrafficDensity[0], App_num) # 根据各网格上的流量密度和业务请求的数量,找到业务请求对应的od和demand
+    df = pd.DataFrame(columns=['coordinates', 'demand'])
+    # 将业务流量请求的数据保存下来
+    for i in range(len(App_demand)):
+        coord = App_coordinates[i]
+        demand = App_demand[i]
+        df.loc[i] = [coord, demand]
+    saveDataFrameToExcel(df, 'AppTraffic_100_SINR')
 
-    TrafficDensity = generateAppTraffic(Area_width, Area_length, grid_size, traffic_th)
-    App_coordinates = generateAppOD_from_grid(TrafficDensity[0], App_num)
-    App_access = access_mapping(Node_Coordinates, App_coordinates, CV_range)
-    Access = App_access[0]
-    Exit = App_access[1]
-    for i in range(len(Access)):
-        for node in Access[i]:
-            if node in Exit[i]:
-                print('业务{}的接入{}和接出{}存在重复节点{}'.format(i, Access[i], Exit[i], node))
-                break
+
+
+
+    # App_access = access_mapping(Node_Coordinates, App_coordinates, CV_range)
+    # Access = App_access[0]
+    # Exit = App_access[1]
+    # for i in range(len(Access)):
+    #     for node in Access[i]:
+    #         if node in Exit[i]:
+    #             print('业务{}的接入{}和接出{}存在重复节点{}'.format(i, Access[i], Exit[i], node))
+    #             break
 

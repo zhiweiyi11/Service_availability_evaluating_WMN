@@ -62,9 +62,10 @@ def calculate_MTBF_analysis(MTTF_list, N, G, App_set):
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
 
         SLA_avail = calculate_SLA_results(App_set, res[0])
-        whole_avail = res[1].apply(np.mean, axis=1) # 对dataframe中的每一行应用求平均值
+        # whole_avail = res[1].apply(np.mean, axis=1) # 对dataframe中的每一行应用求平均值
+        whole_avail = np.mean(res[1].iloc[0].tolist())
         mttf_single_avail.loc[:, mttf] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
-        mttf_whole_avail.loc[:, mttf] = pd.Series(whole_avail)
+        mttf_whole_avail.loc[:, mttf] = whole_avail
 
     return mttf_single_avail, mttf_whole_avail
 
@@ -72,41 +73,50 @@ def calculate_MTBF_analysis(MTTF_list, N, G, App_set):
 
 if __name__ == '__main__':
     # 网络演化对象的输入参数；
-    import_file = False # 不从excel中读取网络拓扑信息
-    Node_num = 100
-    Topology = 'Random'
-    Area_size = (250, 150)
-    Area_width, Area_length = 250, 150
-    Coordinates = generate_positions(Node_num, Area_width, Area_length)
+    save_data = False # 是否保存节点坐标数据
+    Node_num = 200
+    Area_size = (250, 250)
+    Area_width, Area_length = 250, 250
+    Coordinates = generate_positions(Node_num, Area_width, Area_length, save_data)
 
     # TX_range = 50 # 传输范围为区域面积的1/5时能够保证网络全联通
-    transmit_power = 15  # 发射功率(毫瓦)，统一单位：W
-    path_loss = 2.5  # 单位：无
-    noise = pow(10, -10)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
-    bandwidth = 20 * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz
+    transmit_prob = 0.1 # 节点的传输概率
+    transmit_power = 1.5  # 发射功率(毫瓦)，统一单位：W
+    path_loss = 2  # 单位：无
+    noise = pow(10, -11)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
+    bandwidth = 10 * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz
     lambda_TH = 8 * pow(10, -1)  # 接收器的敏感性阈值,用于确定节点的传输范围
-    TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss)
+    # TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss)
+    TX_range = 30
     CV_range = 30  # 节点的覆盖范围
+    # 网络演化对象的输入参数；
+    import_file = False # 不从excel中读取网络拓扑信息
+    Topology = 'Random_SINR'
+
 
     # 业务请求的参数
-    App_num = 20
-    grid_size = 5
-    traffic_th = 0.5  # 业务网格的流量阈值
-    App_Demand = np.random.normal(loc=3, scale=1, size=App_num)  # 生成平均值为5，标准差为1的业务带宽请求的整体分布
-    App_Priority = [1, 2, 3]
-    ratio_str = 1  # 尽量分离和尽量重用的业务占比
-    Strategy_P = ['Global'] * int(App_num * (1 - ratio_str))
-    Strategy_S = ['Local'] * int(App_num * ratio_str)
-    App_Strategy = Strategy_S + Strategy_P
+    # App_num = 20
+    # grid_size = 5
+    # traffic_th = 0.5  # 业务网格的流量阈值
+    # App_Demand = np.random.normal(loc=3, scale=1, size=App_num)  # 生成平均值为5，标准差为1的业务带宽请求的整体分布
+    # App_Priority = [1, 2, 3,4,5]
+    # ratio_str = 1  # 尽量分离和尽量重用的业务占比
+    # Strategy_P = ['Global'] * int(App_num * (1 - ratio_str))
+    # Strategy_S = ['Local'] * int(App_num * ratio_str)
+    # App_Strategy = Strategy_S + Strategy_P
 
-    # G = Network(Topology, Node_num, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_file)
+    # G = Network(Topology, transmit_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_file)
     # G, Apps = init_func(G, Coordinates, Area_size, CV_range, grid_size, traffic_th, App_num, App_Demand, App_Priority, App_Strategy)
     # 从文件中创建网络和业务对象
-    Network_parameters = [Topology, Node_num]
+    Network_parameters = [Topology, transmit_prob]
     Wireless_parameters = [TX_range, transmit_power, bandwidth]
     Loss_parameters = [path_loss, noise]
 
-    G, Apps = init_function_from_file('Node_Coordinates_100_randomTopo', 'App_100_randomTopo_SLA1_5', Network_parameters, Wireless_parameters, Loss_parameters)
+    G, Apps = init_function_from_file('Topology_200Nodes_SINR', 'Node_Coordinates_200_Uniform','App_200Nodes_SINR', Network_parameters, Wireless_parameters, Loss_parameters)
+
+    # 将业务的策略修改为Global
+    # for app_id in range(len(Apps)):
+    #     Apps[app_id].str = 'Global'
 
 
     # 业务可用性评估的参数
@@ -121,8 +131,34 @@ if __name__ == '__main__':
     beta = 0.8 # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
 
     # 业务可用度评估计算
-    N = 50 # 网络演化的次数
+    N = 5 # 网络演化的次数
     # MTTF, MLife = 1000, 800
-    MTBF_list = np.linspace(1000, 2000, 100)
+    MTBF_list = np.linspace(1000, 2000, 51) # 100个点
 
     Res = calculate_MTBF_analysis(MTBF_list, N, G, Apps)
+
+
+    # 对计算结果进行图形化的展示
+    time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M') # 记录数据存储的时间
+
+    x_data = MTBF_list
+    y_data = Res[0] # 不同SLA下的业务可用度
+    y2_data = Res[1]
+
+    fig1, ax1 = plt.subplots()
+    fig1.subplots_adjust(hspace=0.5) # make a little extra space between the subplots
+    colors = ['gold','blue','green','orangered','hotpink']
+    for i in range(len(y_data)):
+        ax1.plot(x_data, y_data.loc[i+1], c=colors[i], label='${}$'.format(i+1)) # i+1表示业务等级
+    # ax1.plot(x_data, y2_data.iloc[0], label='whole network')
+    ax1.set_xlabel('MTTF of components')
+    ax1.set_ylabel('Service Availability')
+    plt.legend(loc="upper right", title="Priority")
+    plt.savefig(r'..\Pictures_Saved\line_plot_{}time={}.jpg'.format('MTTF敏感性分析-Local演化N={}次-节点数量为{}'.format(N, len(G)), time2), dpi=1200)
+
+    plt.show()
+
+    save_results(Res[0], 'MTTF敏感性分析-Local演化N=10次,200节点的拓扑')
+
+
+

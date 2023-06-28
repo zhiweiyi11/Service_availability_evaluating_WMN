@@ -31,7 +31,7 @@ from Evaluating_Scripts.MTBF_sensitivity_analysis import *
 from multiprocessing.pool import ThreadPool as Pool
 
 
-def single_availability(App_set, T, beta, traffic_threshold):
+def single_availability(App_set, T, beta, demand_threshold):
     # 计算单次网络演化时的业务可用度(仅考虑中断时长)
     Apps_time_avail = {}  # 仅考虑中断时长的服务可用度
     Apps_performance_avail = {} # 考虑业务实际负载的可用度
@@ -55,7 +55,7 @@ def single_availability(App_set, T, beta, traffic_threshold):
 
         for k in app_out['degradation']:
             for key, value in k.items(): #这里的key为业务降级时的负载值，value为业务降级的时长
-                if key < traffic_threshold:
+                if key < demand_threshold:
                     dw_t += value
                 else:
                     perf_loss += (app_demand - key) * value *3600 # 转换为以秒s为单位
@@ -65,12 +65,17 @@ def single_availability(App_set, T, beta, traffic_threshold):
         app_time_avail = 1 - app_unavail/(3600*T) # 在T时间间隔内的平均服务可用度
         # 服务的性能可用度=1-(总性能损失值)/总期望的性能
         app_performance_avail = 1 - ((app_unavail * app_demand) + (perf_loss ))/ (3600*T*app_demand)
-        if app_performance_avail < 0.9:
-            print('业务{}的性能可用度为{}'.format(app_id, app_out['degradation']))
+        # if app_performance_avail < 0.9:
+        #     print('业务{}的性能可用度为{}'.format(app_id, app_out['degradation']))
+        #     # print('业务{}的修复时间为{}'.format(app_id, app_out['repair']))
 
         Apps_time_avail[app_id] = app_time_avail #
         Apps_performance_avail[app_id] = app_performance_avail
         Single_app_avail[app_id] = beta*app_time_avail + (1-beta)*app_performance_avail
+        if Single_app_avail[app_id] < 0.9:
+            print('业务{}的性能可用度为{}'.format(app_id, app_out['degradation']))
+            print('业务{}的时间可用度为{}'.format(app_id, app_out['repair']))
+
 
     # 计算整网的平均服务可用度
     for app_id, app_val in App_set.items():
@@ -79,7 +84,7 @@ def single_availability(App_set, T, beta, traffic_threshold):
 
     return Single_app_avail, Whole_network_avail
 
-def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, message_processing_time, path_calculating_time, beta, traffic_th):
+def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, message_processing_time, path_calculating_time, beta, demand_th):
     # 生成网络演化对象和演化条件，调用演化规则，来模拟网络的演化过程(Sub_service为服务部署的节点集合)
     # 1: 生成网络的演化对象
     routing_th = 10 # 重路由的次数阈值
@@ -90,26 +95,27 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, me
     # 2: 生成网络的演化条件
     evo_conditions = cond_func(G_tmp, MTTF, MLife, MTTR, T)  # 各链路的MTTF、MTTR具体值在函数中根据对应的分布进行修改
     time_list = evo_conditions.index.tolist()  # 网络发生演化的时刻
-    # print('生成的演化态数量为{}'.format(len(time_list)))
+    print('生成的演化态数量为{}'.format(len(time_list)))
 
     # 3: 触发网络的演化规则
     App_interrupt = [] # 发生中断的业务集合
     for i in range(len(time_list)):
         # print('当前为第{}次演化'.format(i))
         evo_time = time_list[i]
-        # print('当前的演化时刻为{}'.format(evo_time))
+        # print('\n 当前的演化时刻为{}'.format(evo_time))
         nodes_fail = evo_conditions.iloc[i]['fail']
         # print('故障节点为{}'.format(nodes_fail))
         nodes_reco = evo_conditions.iloc[i]['repair']
         # 3.1: 首先根据修复的构件,对等待上线的业务进行恢复
         component_repair(G_tmp, App_tmp, App_interrupt, evo_time, nodes_reco)
-        if App_interrupt:
-            print('仍然中断的app为{}'.format(App_interrupt))
+        # if App_interrupt:
+        #     print('仍然中断的app为{}'.format(App_interrupt))
         #     for app_id in App_interrupt:
         #         print('仍然中断的app {} 的故障时刻为{}'.format(app_id, App_tmp[app_id].fail_time))
 
         # 3.2: 然后根据故障的构件,对故障的业务进行恢复
         apps_fault = component_failure(G_tmp, App_tmp, evo_time, nodes_fail) # 读取发生故障的业务
+        # print('故障的业务集合为{} '.format(apps_fault))
 
         # action1: 对故障业务进行故障检测的action
         App_reroute, App_repair = app_fault_detect(detection_rate, apps_fault)
@@ -117,88 +123,49 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, me
         # action2: 对业务进行按优先级排序
         App_hash = {App_tmp[a].id: App_tmp[a].SLA for a in App_reroute}
         App_reroute_sorted = sorted(App_hash)  # 返回列表，按字典的value值从小到大排序：即业务优先级值越小越优先 # sorted(App_hash, key=lambda x: x[1], reverse=False)
+        # print('需要重路由的app 为{}'.format(App_reroute_sorted))
+        G_tmp.generate_link_state()  # 根据链路的故障率来确定网络链路的权重;(不能这样设置,这样会导致故障率高的链路就经常断,业务都路由到未故障的链路上去了)
 
         # action3: 对业务进行重路由和带宽分配
         App_successful_reroute = []
-        for app_id in App_reroute_sorted:
+        for app_id in App_reroute_sorted: # 优先级高的业务先进行重路由和带宽分配
             app = App_tmp[app_id]
             app_original_path = app.path
             # print('\n app original path is {}'.format(app_original_path))
             recovery_parameters = [message_processing_time, path_calculating_time, len(App_reroute)]
-            app_new_path, reroute_duration = path_reroute(G_tmp,  app.access, app.exit, app_original_path, app.str, nodes_fail, recovery_parameters)
+            app_new_path, reroute_duration = path_reroute(G_tmp,  app.demand, app.access, app.exit, app_original_path, app.str, nodes_fail, recovery_parameters)
             # print('app _new path is {}'.format(app_new_path))
             if app_new_path: # 如果业务重路由成功
                 # print('reroute successful app id is {}'.format(app_id))
-                App_successful_reroute.append(app_id)
+                App_successful_reroute.append(app_id) # 记录重路由成功的业务id
                 app.app_undeploy_node(G_tmp) # 解除业务到节点的映射
                 app.app_undeploy_edge(G_tmp) # 在路径更新前需要同时解除业务到链路上的带宽映射
                 app.fail_time = 0
                 app.path = app_new_path
+                # print('业务id {}的新路径为{}'.format(app_id, app.path))
                 app.outage['reroute'].append(reroute_duration)
                 app.app_deploy_node(G_tmp) # 将业务新的路径部署到节点上去
-                '''# action4: 对业务进行带宽分配操作
+
+                # 以下是新改写的代码
                 app_original_load = app.load
                 app_new_load, degradation_duration, degradation_time = load_allocate(G_tmp, evo_time, app.path, app.demand, app_original_load, app.down_time)
-                app.down_time = degradation_time
                 app.load = app_new_load
+                if app_new_load == app.demand:
+                    app.down_time = 0
+                else:
+                    app.down_time = evo_time
                 if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
                     app.outage['degradation'].append(degradation_duration)
                 app.app_deploy_edge(G_tmp)
-                '''
-                # action4 :对多业务进行带宽分配的调整
-                App_allocated_load = app_load_allocating(G_tmp, App_tmp, app_id, app_new_path)
-                print('业务带宽重分配的结果为{}'.format(App_allocated_load))
-                for id, load in App_allocated_load.items():
-                    if id == app_id:
-                        app_original_load = App_tmp[id].load # 记录业务的原负载
-                        App_tmp[id].load = load # 赋值给业务的负载
-                        App_tmp[id].app_deploy_edge(G_tmp) # 将业务的负载部署至网络上
-                        # print('业务{}的新路径{}被重新部署至网络上 \n'.format(id, App_tmp[id].path))
-                        degradation_duration, degradation_time = app_degradation(evo_time, App_tmp[id].demand, app_original_load, load, App_tmp[id].down_time)
-                        # App_tmp[id].down_time = degradation_time # 更新业务降级的时刻
-                        # if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
-                        #     App_tmp[id].outage['degradation'].append(degradation_duration)
-                        if App_tmp[id].down_time == evo_time and App_tmp[id].outage['degradation']: # 如果降级发生在当前的演化时刻且业务之前已经发生过降级
-                            if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
-                                duration = list(App_tmp[id].outage['degradation'][-1].values())[0] # 读取上一次记录的业务降级的持续时间
-                                # print('业务{}的旧负载为{}'.format(id, app_original_load))
-                                App_tmp[id].outage['degradation'][-1] = {load: duration} # 仅替换降级发生时的负载为当前业务分配的负载load
-                                # print('业务{}降级时负载替换成功为{}'.format(id, {load:duration}))
-                        else:
-                            if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
-                                App_tmp[id].outage['degradation'].append(degradation_duration)
-                        App_tmp[id].down_time = degradation_time # 更新业务降级的时刻
 
-                    else:
-                        # print('app {} 属于被动重分配'.format(id))
-                        app_original_load = App_tmp[id].load # 记录业务的原负载
-                        App_tmp[id].app_undeploy_edge(G_tmp) # 先将业务原来映射路径上各链路的负载更新
-                        # print('业务{}解除到链路映射时的路径为{}'.format(id, App_tmp[id].path))
-                        App_tmp[id].load = load # 赋值给业务的负载
-                        App_tmp[id].app_deploy_edge(G_tmp)
-                        # print('业务{}恢复到链路映射时的路径为{}'.format(id, App_tmp[id].path))
-                        degradation_duration, degradation_time = app_degradation(evo_time, App_tmp[id].demand, app_original_load, load, App_tmp[id].down_time)
-
-                        if App_tmp[id].down_time == evo_time and App_tmp[id].outage['degradation']: # 如果降级发生在当前的演化时刻且业务之前已经发生过降级
-                            if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
-                                duration = list(App_tmp[id].outage['degradation'][-1].values())[0] # 读取上一次记录的业务降级的持续时间
-                                # print('业务{}的旧负载为{}'.format(id, app_original_load))
-                                App_tmp[id].outage['degradation'][-1] = {load: duration} # 仅替换降级发生时的负载为当前业务分配的负载load
-                                # print('业务{}降级时负载替换成功为{}'.format(id, {load:duration}))
-                        elif App_tmp[id].down_time == evo_time and not App_tmp[id].outage['degradation']: # 如果业务是首次降级，并且在该次演化下发生多次降级
-                            # 这种情况下只要更新业务的load就行,因为业务才刚刚开始降级
-                            continue
-                        else:
-                            if degradation_duration:  # 如果存在降级，则将降级时长及负载记录
-                                App_tmp[id].outage['degradation'].append(degradation_duration)
-                        App_tmp[id].down_time = degradation_time # 更新业务降级的时刻
 
             else:
                 App_interrupt.append(app_id)
-                print('重路由不成功的app为{} \n'.format(app_id))
+                App_tmp[app_id].fail_time = evo_time # 上一个双保险,确保重路由不成功的app的故障时间被记录
+                # print('重路由不成功的app为{} '.format(app_id))
 
 
-    onetime_availability = single_availability(App_tmp, T, beta, traffic_th) # 单次演化的业务可用度结果
+    onetime_availability = single_availability(App_tmp, T, beta, demand_th) # 单次演化的业务可用度结果
     # print('当前演化下业务可用度计算完成 \n')
     # time.sleep(2)
     # print(threading.current_thread().name + '执行操作的业务可用度结果是={} \n'.format(onetime_availability[0][1] ))
@@ -233,7 +200,7 @@ def Apps_Availability_Count(N, func_name, T, G, App, MTTF, MLife, MTTR, switch_t
     # executor.shutdown(wait=True)
     return res_avail, res_loss
 
-def Apps_Availability_MC(N,T, G, Apps,  MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta, traffic_th):
+def Apps_Availability_MC(N,T, G, Apps,  MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta, demand_th):
     # 计算业务可用度的主函数，采用蒙特卡洛方法
 
     multi_single_avail = pd.DataFrame(index=list(Apps.keys())) # 存储N次演化下各次的业务可用度结果
@@ -243,7 +210,7 @@ def Apps_Availability_MC(N,T, G, Apps,  MTTF, MLife, MTTR, detection_rate, messa
         st_time = time.time()
         G_tmp = copy.deepcopy(G)
         App_tmp = copy.deepcopy(Apps)
-        result = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta, traffic_th)
+        result = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta, demand_th)
         # print('当前第{}次循环业务的可用度为{}'.format(n, result[0][1]))
         multi_single_avail.loc[:, n + 1] = pd.Series(result[0])  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
         multi_whole_avail.loc[:, n + 1] = result[1]
@@ -259,48 +226,55 @@ def save_results(origin_df, file_name):
     time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M') # 记录数据存储的时间
     sys_path = os.path.abspath('..')  # 表示当前所处文件夹上一级文件夹的绝对路径
 
-    with pd.ExcelWriter(sys_path + r'.\Results_saved\{}_time{}.xlsx'.format(file_name, time2)) as xlsx: # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。
+    with pd.ExcelWriter(sys_path + r'.\Results_saving\{}_time{}.xlsx'.format(file_name, time2)) as xlsx: # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。
         origin_df.to_excel(xlsx, sheet_name='app_avail', index=False) # 不显示行索引
         print('数据成功保存')
 
 
 if __name__ == '__main__':
     # 网络演化对象的输入参数；
-    import_file = False # 不从excel中读取网络拓扑信息
-    Node_num = 100
-    Topology = 'Random'
-    Area_size = (250, 150)
-    Area_width, Area_length = 250, 150
-    Coordinates = generate_positions(Node_num, Area_width, Area_length)
+    save_data = False # 是否保存节点坐标数据
+    Node_num = 200
+    Area_size = (250, 250)
+    Area_width, Area_length = 250, 250
+    Coordinates = generate_positions(Node_num, Area_width, Area_length, save_data)
 
     # TX_range = 50 # 传输范围为区域面积的1/5时能够保证网络全联通
-    transmit_power = 15  # 发射功率(毫瓦)，统一单位：W
-    path_loss = 2.5  # 单位：无
-    noise = pow(10, -10)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
-    bandwidth = 20 * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz
+    transmit_prob = 0.1 # 节点的传输概率
+    transmit_power = 1.5  # 发射功率(毫瓦)，统一单位：W
+    path_loss = 2  # 单位：无
+    noise = pow(10, -11)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
+    bandwidth = 10 * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz
     lambda_TH = 8 * pow(10, -1)  # 接收器的敏感性阈值,用于确定节点的传输范围
-    TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss)
+    # TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss)
+    TX_range = 30
     CV_range = 30  # 节点的覆盖范围
 
     # 业务请求的参数
-    App_num = 20
-    grid_size = 5
-    traffic_th = 0.5  # 业务网格的流量阈值
-    App_Demand = np.random.normal(loc=3, scale=1, size=App_num)  # 生成平均值为3，标准差为1的业务带宽请求的整体分布
-    App_Priority = [1, 2, 3]
-    ratio_str = 1  # 尽量分离和尽量重用的业务占比
-    Strategy_P = ['Global'] * int(App_num * (1 - ratio_str))
-    Strategy_S = ['Local'] * int(App_num * ratio_str)
-    App_Strategy = Strategy_S + Strategy_P
+    # App_num = 100
+    # grid_size = 5
+    # traffic_th = 1  # 业务网格的流量阈值
+    # App_Demand = np.random.normal(loc=3, scale=1, size=App_num)  # 生成平均值为3，标准差为1的业务带宽请求的整体分布
+    # App_Priority = [1, 2, 3, 4, 5]
+    # ratio_str = 1  # 尽量分离和尽量重用的业务占比
+    # Strategy_P = ['Global'] * int(App_num * (1 - ratio_str))
+    # Strategy_S = ['Local'] * int(App_num * ratio_str)
+    # App_Strategy = Strategy_S + Strategy_P
 
-    # G = Network(Topology, Node_num, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_file)
+    import_file = False # 不从excel中读取网络拓扑信息
+    Topology = 'Random_SINR'
+
+    # G = Network(Topology, transmit_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_file)
     # G, Apps = init_func(G, Coordinates, Area_size, CV_range, grid_size, traffic_th, App_num, App_Demand, App_Priority, App_Strategy)
     # 从文件中创建网络和业务对象
-    Network_parameters = [Topology, Node_num]
+    Network_parameters = [Topology, transmit_prob]
     Wireless_parameters = [TX_range, transmit_power, bandwidth]
     Loss_parameters = [path_loss, noise]
 
-    G, Apps = init_function_from_file('Node_Coordinates_100_randomTopo', 'App_100_randomTopo_SLA1_5', Network_parameters, Wireless_parameters, Loss_parameters)
+    # G_200, Apps_200 = init_function_from_file('Node_Coordinates_200_randomTopo', 'App_100_randomTopo_SLA1_5', Network_parameters, Wireless_parameters, Loss_parameters)
+
+    G_150, Apps_150 = init_function_from_file('Topology_200Nodes_SINR', 'Node_Coordinates_200_Uniform','App_200Nodes_SINR', Network_parameters, Wireless_parameters, Loss_parameters)
+
 
 
     # 业务可用性评估的参数
@@ -308,19 +282,22 @@ if __name__ == '__main__':
     MTTF, MLife = 1000, 800
     MTTR = 2
     ## 重路由相关的参数
-    message_processing_time = 0.01
-    path_calculating_time = 0.5
+    message_processing_time = 0.01 # 单位为秒 s
+    path_calculating_time = 0.5 # 单位为秒 s
     detection_rate = 0.99
-    demand_th = 3*0.2 # 根据App_demand中的均值来确定
-    beta = 0.8 # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
+    demand_th = 1*0.2 # 根据App_demand中的均值来确定
+    beta = 0.5 # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
 
     # 业务可用度评估计算
     N = 1 # 网络演化的次数
 
     # app_results = calculateAvailability(T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time,  path_calculating_time, beta, demand_th)
     st = time.time()
-    Multi_app_results = Apps_Availability_MC(N, T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time,   path_calculating_time, beta, traffic_th)
-    SLA_app_results = calculate_SLA_results(Apps, Multi_app_results[0])
+    # 计算网络拓扑100个节点和200个节点下的业务可用度
+    # Multi_app_results_200 = Apps_Availability_MC(N, T, G_200, Apps_200, MTTF, MLife, MTTR, detection_rate, message_processing_time,   path_calculating_time, beta, traffic_th)
+    Multi_app_results_150 = Apps_Availability_MC(N, T, G_150, Apps_150, MTTF, MLife, MTTR, detection_rate, message_processing_time,   path_calculating_time, beta, demand_th)
+    # SLA_app_results_200 = calculate_SLA_results(Apps_200, Multi_app_results_200[0])
+    SLA_app_results_150 = calculate_SLA_results(Apps_150, Multi_app_results_150[0])
     et = time.time()
     print('\n 采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, et - st))
 
