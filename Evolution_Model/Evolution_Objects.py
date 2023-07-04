@@ -59,10 +59,10 @@ def generate_positions(NB_nodes, Area_width, Area_length, save_data):
     # 保存网络节点的坐标数据为excel
     df = pd.DataFrame(Node_coordinates)
     # Plotting
-    plt.scatter(pos_x, pos_y, edgecolor='b', facecolor='none', alpha=0.5)
-    plt.xlabel("x")
-    plt.ylabel("y")
-    plt.show()
+    # plt.scatter(pos_x, pos_y, edgecolor='b', facecolor='none', alpha=0.5)
+    # plt.xlabel("x")
+    # plt.ylabel("y")
+    # plt.show()
 
     # time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')  # 记录数据存储的时间
     if save_data == True:
@@ -321,7 +321,19 @@ class Network(nx.Graph): # 表示继承为nx.Graph的子类
                 self.adj[edge[0]][edge[1]]['weight'] = float('inf')
             else:
                 self.adj[edge[0]][edge[1]]['weight'] = 1
-        print('当前演化态下链路中断的总数为{}'.format(failed_link_num))
+        # print('当前演化态下链路中断的总数为{}'.format(failed_link_num))
+
+    def restore_link_state(self) :
+        # 在重路由计算结束后还原链路状态,即将各链路的权重还原为1
+        nodes_list = list(self)
+        for n in range(len(nodes_list)):
+            node_state = self.nodes[n]['alive']
+            if node_state != 0: # 如果节点未故障的话
+                adj_nodes = list(self.adj[n])
+                for adj in adj_nodes:   # 将未failure的节点的邻接链路的权重恢复为非中断率
+                    link_fail_rate = self.adj[n][adj]['fail_rate']
+                    self.adj[n][adj]['weight'] = 1 - link_fail_rate
+        # print('链路权重恢复正常 \n')
 
 
     def draw_topo(self, coordinates):
@@ -505,14 +517,14 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
     App_dict = {}
     random.shuffle(App_Priority) # 将制定业务等级的list打乱，但是各等级的数量仍然不变
     TrafficDensity = generateAppTraffic(Area_width, Area_length, grid_size, traffic_th)
-    App_coordinates, App_demand = generateAppOD_from_grid(TrafficDensity[0], App_num) # 根据各网格上的流量密度和业务请求的数量,找到业务请求对应的od和demand
+    App_coordinates, App_traffic = generateAppOD_from_grid(TrafficDensity[0], App_num) # 根据各网格上的流量密度和业务请求的数量,找到业务请求对应的od和demand
     df = pd.DataFrame(columns=['coordinates', 'demand'])
     # 将业务流量请求的数据保存下来
-    for i in range(len(App_demand)):
+    for i in range(len(App_traffic)):
         coord = App_coordinates[i]
-        demand = App_demand[i]
+        demand = App_traffic[i]
         df.loc[i] = [coord, demand]
-    saveDataFrameToExcel(df, 'AppTraffic_200_SINR')
+    saveDataFrameToExcel(df, 'GridTraffic_[request={}]'.format(App_num))
 
     for i in range(len(App_coordinates)):
         #　随机选择2个不重复的网格节点来作为业务的od对
@@ -529,8 +541,9 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
             else:
                 app_od_coord = random.sample(TrafficDensity[0].keys(), 2)
 
-        priority = random.choice(App_Priority)
-        demand = App_demand[i] # 业务的流量从密度矩阵中生成
+        priority = App_Priority[i]
+        # demand = App_traffic[i] # 业务的流量从密度矩阵中生成
+        demand = App_Demand[i] # 业务的请求的流量从外部输入
         strategy = App_Strategy[i]
 
         while True:
@@ -619,30 +632,35 @@ if __name__ == '__main__':
     # 参考现有的WSN仿真器的代码，完成WSN网络的构建
     # 完成网络的代码调试
     save_data = True # 不保存节点坐标数据
-    Node_num =  200
+    Node_num =  140
     Topology = 'Random_SINR'
-    Area_size = (250, 250)
+    Area_size = (150, 150)
     # Area_width, Area_length = 500,500# 250, 200
     Coordinates = generate_positions(Node_num, Area_size[0], Area_size[1], save_data)
-    Coordinates_sample = generate_PPP_distribution(Area_size, Node_num, save_data) # 当节点传输半径较小时，通过增加节点的数量来保证网络的连通性
+    # Coordinates_sample = generate_PPP_distribution(Area_size, Node_num, save_data) # 当节点传输半径较小时，通过增加节点的数量来保证网络的连通性
+    # Coordinates_file = 'Node_Coordinates_100_Uniform'
+    # Coordinates_df = pd.read_excel( r"..\Results_Saving\{}.xlsx".format(Coordinates_file), sheet_name=0, index_col=0)
+    # Coordinates = dict(zip(Coordinates_df.index, Coordinates_df.values))
 
     # TX_range = 50 # 传输范围为区域面积的1/5时能够保证网络全联通
     transmit_prob = 0.1 # 节点的数据发送概率
     transmit_power = 1.5  # 发射功率(毫瓦)，统一单位：W
     path_loss = 2  # 单位：无
     noise = pow(10, -11)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
-    bandwidth = 10 * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz 10* pow(10, 6)
+    Band = 10
+    bandwidth = Band * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz 10* pow(10, 6) 改变网络的容量和带宽;
     lambda_TH = 8 * pow(1, -1)  # 接收器的敏感性阈值,用于确定节点的传输范围
     # TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss) # 传输范围为38.8
     TX_range = 30 # 为了让整网链路的平均故障率低，需要将节点的传输范围设置较小值,并且增加节点的密度保证网络的拓扑连通性
     CV_range = 30 # 节点的覆盖范围
 
     # 业务请求的参数
-    App_num = 100
+    App_num = 50
     grid_size = 5
     traffic_th = 1 # 业务网格的流量阈值
-    App_Demand = np.random.normal(loc= 2, scale=1, size=App_num) # 生成平均值为3，标准差为1的业务带宽请求的整体分布
-    App_Priority = [1,2,3,4,5]
+    Demand = 2
+    App_Demand = np.random.normal(loc=Demand, scale=1, size=App_num) # 生成平均值为3，标准差为1的业务带宽请求的整体分布
+    App_Priority = [1,2,3,4,5] * int(App_num / 5) # 用于分析不同业务优先级对服务可用度的影响，假设各等级的业务数量相同
     ratio_str = 1 # 尽量分离和尽量重用的业务占比
     Strategy_P = ['Global'] * int(App_num*(1-ratio_str))
     Strategy_S = ['Local'] * int(App_num*ratio_str)
@@ -650,7 +668,7 @@ if __name__ == '__main__':
 
     # 确定是否从文件导入数据
     import_topology_file = False # 不从文件中导入拓扑数据
-    file_name = 'Topology_200_SINR'
+    file_name = 'Topology_100_SINR'
 
     ## 这是初始随机生成网络及业务对象的代码
     G = Network(Topology, transmit_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_topology_file, file_name)
@@ -666,8 +684,9 @@ if __name__ == '__main__':
         edge_info.append(G.edges[e[0], e[1]]['capacity'])
         edge_info.append(G.edges[e[0], e[1]]['fail_rate'])
         Edges_info[i] = edge_info
-    save_GraphInfo(Edges_info, 'Topology_200_SINR')
-    save_AppInfo(Apps, 'App_200_SINR')
+
+    save_GraphInfo(Edges_info, 'Topology_{}_Band={}'.format(Node_num, Band) )
+    save_AppInfo(Apps, 'App_{}_Demand={}_inTopo={}'.format(App_num, Demand, Node_num))
     # # # Apps_load = load_AppInfoFromExcel('App_100_SINR')
     # #
     # # # # 保存网络拓扑和业务请求的数据至Excel
@@ -683,6 +702,7 @@ if __name__ == '__main__':
     Loss_parameters = [path_loss, noise]
 
     # G, Apps = init_function_from_file('Topology_150_SINR', 'Node_Coordinates_150_SINR','App_150_SINR', Network_parameters, Wireless_parameters, Loss_parameters)
+    G.draw_topo(Coordinates)
 
     ave_link_fail = 0
     num_efficient_link = 0

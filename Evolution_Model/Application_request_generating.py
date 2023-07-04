@@ -151,7 +151,7 @@ def access_mapping(Node_coordinates, App_coordinates, CV_Range):
 if __name__ == '__main__':
     # 完成网络的代码调试
     Node_num =  100
-    App_num = 100
+    App_num = 50
     Cap_node = 20
     Topology = 'Random'
     Area_width, Area_length = 250, 250
@@ -176,7 +176,7 @@ if __name__ == '__main__':
         coord = App_coordinates[i]
         demand = App_demand[i]
         df.loc[i] = [coord, demand]
-    saveDataFrameToExcel(df, 'AppTraffic_100_SINR')
+    # saveDataFrameToExcel(df, 'AppTraffic_100_SINR')
 
 
 

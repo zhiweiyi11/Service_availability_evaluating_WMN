@@ -84,7 +84,7 @@ def single_availability(App_set, T, beta, demand_threshold):
 
     return Single_app_avail, Whole_network_avail
 
-def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, message_processing_time, path_calculating_time, beta, demand_th):
+def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th):
     # 生成网络演化对象和演化条件，调用演化规则，来模拟网络的演化过程(Sub_service为服务部署的节点集合)
     # 1: 生成网络的演化对象
     routing_th = 10 # 重路由的次数阈值
@@ -164,12 +164,17 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, me
                 App_tmp[app_id].fail_time = evo_time # 上一个双保险,确保重路由不成功的app的故障时间被记录
                 # print('重路由不成功的app为{} '.format(app_id))
 
+        G_tmp.restore_link_state() # 将链路的权重还原为其非中断率【这里还需要修改】
 
-    onetime_availability = single_availability(App_tmp, T, beta, demand_th) # 单次演化的业务可用度结果
+    OneTime_SLA_availability, OneTime_whole_availability = [], []
+    for beta in beta_list:
+        onetime_availability = single_availability(App_tmp, T, beta, demand_th) # 单次演化的业务可用度结果
+        OneTime_SLA_availability.append(onetime_availability[0])
+        OneTime_whole_availability.append(onetime_availability[1])
     # print('当前演化下业务可用度计算完成 \n')
     # time.sleep(2)
     # print(threading.current_thread().name + '执行操作的业务可用度结果是={} \n'.format(onetime_availability[0][1] ))
-    return onetime_availability
+    return OneTime_SLA_availability, OneTime_whole_availability
 
 
 def Apps_Availability_Count(N, func_name, T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time):
@@ -200,8 +205,8 @@ def Apps_Availability_Count(N, func_name, T, G, App, MTTF, MLife, MTTR, switch_t
     # executor.shutdown(wait=True)
     return res_avail, res_loss
 
-def Apps_Availability_MC(N,T, G, Apps,  MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta, demand_th):
-    # 计算业务可用度的主函数，采用蒙特卡洛方法
+def Apps_Availability_MC(N,T, G, Apps,  MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th):
+    # 计算业务可用度的主函数，采用蒙特卡洛方法, 仅适用于单个beta的计算
 
     multi_single_avail = pd.DataFrame(index=list(Apps.keys())) # 存储N次演化下各次的业务可用度结果
     multi_whole_avail = pd.DataFrame(index= ['evo_times']) # 存储N次演化下整网业务的可用度结果
@@ -210,10 +215,10 @@ def Apps_Availability_MC(N,T, G, Apps,  MTTF, MLife, MTTR, detection_rate, messa
         st_time = time.time()
         G_tmp = copy.deepcopy(G)
         App_tmp = copy.deepcopy(Apps)
-        result = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta, demand_th)
+        SLA_avail, whole_avail = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
         # print('当前第{}次循环业务的可用度为{}'.format(n, result[0][1]))
-        multi_single_avail.loc[:, n + 1] = pd.Series(result[0])  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
-        multi_whole_avail.loc[:, n + 1] = result[1]
+        multi_single_avail.loc[:, n + 1] = pd.Series(SLA_avail[0])  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
+        multi_whole_avail.loc[:, n + 1] = whole_avail[0]
         ed_time = time.time()
         print('\n 当前为第{}次蒙卡仿真, 仿真时长为{}s'.format(n, ed_time-st_time))
 
@@ -229,6 +234,7 @@ def save_results(origin_df, file_name):
     with pd.ExcelWriter(sys_path + r'.\Results_saving\{}_time{}.xlsx'.format(file_name, time2)) as xlsx: # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。
         origin_df.to_excel(xlsx, sheet_name='app_avail', index=False) # 不显示行索引
         print('数据成功保存')
+
 
 
 if __name__ == '__main__':
@@ -272,21 +278,29 @@ if __name__ == '__main__':
     Loss_parameters = [path_loss, noise]
 
     # G_200, Apps_200 = init_function_from_file('Node_Coordinates_200_randomTopo', 'App_100_randomTopo_SLA1_5', Network_parameters, Wireless_parameters, Loss_parameters)
-
-    G_150, Apps_150 = init_function_from_file('Topology_200Nodes_SINR', 'Node_Coordinates_200_Uniform','App_200Nodes_SINR', Network_parameters, Wireless_parameters, Loss_parameters)
+    topology_file = 'Topology_100_Band=10[for_priority_analysis]'
+    coordinates_file =  'Node_Coordinates_100_Uniform[for_priority_analysis]'
+    app_file = 'App_50_Demand=2_inTopo=100[for_priority_analysis]'
+    G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
 
 
 
     # 业务可用性评估的参数
     T = 8760
     MTTF, MLife = 1000, 800
-    MTTR = 2
+    MTTR = 4
     ## 重路由相关的参数
-    message_processing_time = 0.01 # 单位为秒 s
-    path_calculating_time = 0.5 # 单位为秒 s
+    message_processing_time = 0.05 # 单位为秒s [毫秒量级]
+    path_calculating_time = 5 # 单位为秒 s [秒量级]
     detection_rate = 0.99
     demand_th = 1*0.2 # 根据App_demand中的均值来确定
-    beta = 0.5 # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
+    beta_list = [0.5] # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
+    App_priority_list = [1,2,3,4,5]
+    app_priority = App_priority_list * int(len(Apps) / len(App_priority_list))
+    random.shuffle(app_priority)
+    for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
+        Apps[i].SLA = app_priority[i]
+        # Apps[i].str = 'Global'
 
     # 业务可用度评估计算
     N = 1 # 网络演化的次数
@@ -295,9 +309,9 @@ if __name__ == '__main__':
     st = time.time()
     # 计算网络拓扑100个节点和200个节点下的业务可用度
     # Multi_app_results_200 = Apps_Availability_MC(N, T, G_200, Apps_200, MTTF, MLife, MTTR, detection_rate, message_processing_time,   path_calculating_time, beta, traffic_th)
-    Multi_app_results_150 = Apps_Availability_MC(N, T, G_150, Apps_150, MTTF, MLife, MTTR, detection_rate, message_processing_time,   path_calculating_time, beta, demand_th)
+    Multi_app_results = Apps_Availability_MC(N, T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time,   path_calculating_time, beta_list, demand_th)
     # SLA_app_results_200 = calculate_SLA_results(Apps_200, Multi_app_results_200[0])
-    SLA_app_results_150 = calculate_SLA_results(Apps_150, Multi_app_results_150[0])
+    SLA_app_results = calculate_SLA_results(Apps, Multi_app_results[0], App_priority_list)
     et = time.time()
     print('\n 采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, et - st))
 

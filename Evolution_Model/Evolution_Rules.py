@@ -21,8 +21,9 @@ def k_shortest_paths(k, G, source, target,  weight, strategy, original_path_leng
     # use this function to efficiently compute the k shortest/best paths between two nodes
     candidate_paths = []
     res = list(islice(nx.shortest_simple_paths(G, source, target, weight=weight), k)) # This procedure is based on algorithm by Jin Y. Yen [1]. Finding the first K paths requires O(K N^3) operations
+    # print('计算得到的K最短路径集合为{}'.format(res))
     if strategy == 'Local':
-        max_hop = 5
+        max_hop = 10
         for p in res:
             if len(p) <= max_hop:
                 candidate_paths.append(p)
@@ -143,11 +144,13 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
         # print('业务的重路由策略为{}'.format(app_strategy))
 
         # 1) 先将原始的路径上的链路权重设置为无穷大
-        for i in range(len(app_path)-1):
-            G_sample.adj[app_path[i]][app_path[i+1]]['weight'] = float('inf')
+        # for i in range(len(app_path)-1):
+        #     G_sample.adj[app_path[i]][app_path[i+1]]['weight'] = float('inf')
         # 2) 然后在业务的接入和接出节点集合中寻找一条满足业务带宽需求的路径
         node = node_fail_list[0] # 取出故障节点集合中的第一个节点
         fail_node_index = app_path.index(node)
+        # 确保从未故障的节点集合中选择路由的源宿节点
+
         ## 确定业务重路由的源宿节点
         if fail_node_index == 0:  # 如果故障的节点是链路的首节点或尾节点
             # 根据节点的状态来重新选择业务的源节点
@@ -162,7 +165,6 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
                     return new_app_path, reroute_duration
             else:
                 return new_app_path, reroute_duration
-
 
         elif fail_node_index == len(app_path) - 1:
             if len(app_exit) > 1:
@@ -179,15 +181,18 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
                 return new_app_path, reroute_duration
 
         else: # 如果故障的节点为业务的中继节点，则直接从其源宿节点list中随机选择一个进行重路由
-            source = random.choice(app_access)
-            destination = random.choice(app_exit)
+            source = app_path[0]
+            destination = app_path[-1]
         # 计算新的业务路径
         # new_app_path = nx.shortest_path(G_sample, source, destination, 'weight')
         original_path_length = len(app_path)
         new_app_path_optional = k_shortest_paths(K, G_sample, source, destination,  'weight', app_strategy, original_path_length)
-        new_app_path, new_app_load = find_available_path(G_sample, app_demand, new_app_path_optional, node_fail_list[0])
+        # print('计算得到的可选路径为{}'.format(new_app_path_optional))
+        new_app_path = find_available_path(G_sample, app_demand, new_app_path_optional, node_fail_list[0])
         if new_app_path: # 如果路径存在
             reroute_duration = (rerouting_app_num + (fail_node_index + 1) + 2 * len(new_app_path)) * message_processing_time + rerouting_app_num * path_calculating_time
+        else:
+            print('业务原路径{}重路由计算不成功，可选的路径集合为{}'.format(original_path_length, new_app_path_optional))
 
     '''业务的Local重路由策略'''
     if app_strategy == 'Local':
@@ -205,10 +210,11 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
             if len(app_access) > 1: # 如果业务有其余可以接入的节点list
                 available_access_list = [] # 当前演化态下存储可接入节点的list
                 for n in app_access:
-                    if G_sample.nodes[n]['alive'] == 1:
+                    if G_sample.nodes[n]['alive'] == 1 and n not in app_path:
                         available_access_list.append(n)
                 if available_access_list: # 如果存在可接入的节点list
                     source = random.choice(available_access_list)
+                    destination = app_path[fail_node_index+1]
                 else: # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
                     return new_app_path, reroute_duration
             else:
@@ -220,11 +226,14 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
             # 重新选择业务的宿节点
             if len(app_exit) > 1:
                 available_exit_list = []
+
                 for n in app_exit:
-                    if G_sample.nodes[n]['alive'] == 1:
+                    if G_sample.nodes[n]['alive'] == 1 and n not in app_path: #需要确保业务重新选择的宿节点不能与原路径的节点相同
                         available_exit_list.append(n)
                 if available_exit_list:  # 如果存在可接入的节点list
                     destination = random.choice(available_exit_list)
+                    source = app_path[fail_node_index-1] # local策略下重路由时，若宿节点故障，发起重路由的源节点仍然不变
+
                 else:  # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
                     return new_app_path, reroute_duration
             else: # 如果业务的接出节点仅有1个
@@ -244,6 +253,7 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
                     G_sample.adj[n][adj]['weight'] = float('inf')  # 将节点邻接的边的权重设置为无穷大
 
         # new_subpath = nx.shortest_path(G_sample, source, destination, 'weight')
+
         original_path_length = len(app_path)
         new_subpath_optional = k_shortest_paths(K, G_sample, source, destination,  'weight', app_strategy, original_path_length)
         # print('重路由计算得到的候选路径集为{}'.format(new_subpath_optional))
@@ -255,6 +265,8 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
             else:
                 new_app_path = app_path[:fail_node_index-1] + new_subpath[:-1] + app_path[fail_node_index+1:] # 对子路径进行切片组合为新的业务路径
             reroute_duration = (rerouting_app_num + 2 * len(new_subpath)) * message_processing_time + rerouting_app_num * path_calculating_time
+        else:
+            print('业务原路径{}重路由计算不成功，可选的路径集合为{}'.format(original_path_length, new_subpath_optional))
 
         # # 用来检测Local策略下重路由计算出来的路径是否有回环
         # s1 = set(new_app_path)
@@ -291,9 +303,9 @@ def load_allocate(G, evo_time, app_new_path, app_demand, app_original_load, app_
         if app_downtime > 0: # 判断上一时刻业务是否降级
             degradation_load = app_original_load # 记录上一时刻的业务负载为降级的负载
             app_degradation[degradation_load] = evo_time - app_downtime
-            print('业务的降级时长为{}'.format(app_degradation))
-            if evo_time - app_downtime > 100:
-                print('当前演化时刻为{},业务上一降级的时刻为{}'.format(evo_time, app_downtime))
+            # print('业务的降级时长为{}'.format(app_degradation))
+            # if evo_time - app_downtime > 100:
+            #     print('当前演化时刻为{},业务上一降级的时刻为{}'.format(evo_time, app_downtime))
     else:
         app_degradation_time = 0
 

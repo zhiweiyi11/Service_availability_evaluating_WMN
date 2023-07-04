@@ -161,16 +161,16 @@ def Apps_availability_func(N, args, pool_num):
 
     return multi_avail, multi_loss
 
-def function_SINR(s, d_ij, d_interferer_list):
+def function_SINR(s, d_ij, d_interferer_list, noise_power):
     m = 4
     gamma = 1
-    W = 0.0001
+    W = 0.0002
     # d_ij = 20
     # d_interferer_list = [35]
     alpha = 2
     Pt = 1.5
     # s = symbols('s', real=True)
-    k = (m * gamma * W) / (Pt*pow(d_ij, -alpha))
+    k = (m * gamma * noise_power) / (Pt*pow(d_ij, -alpha))
 
     y1 = 1
     for d_vj in d_interferer_list:
@@ -182,7 +182,7 @@ def function_SINR(s, d_ij, d_interferer_list):
     return y2
 
 
-def calculate_SINR_outage_probability(m, d_ij, d_interferer_list):
+def calculate_SINR_outage_probability(m, d_ij, d_interferer_list, noise_power):
     '''
     # 计算基于SINR的链路故障率
     :param gamma: SINR 阈值, 通常为1
@@ -198,7 +198,7 @@ def calculate_SINR_outage_probability(m, d_ij, d_interferer_list):
     for n in range(m):
         aa = pow(-1, n)/np.math.factorial(n)
         print('aa is {}'.format(aa))
-        bb = diff(function_SINR(s, d_ij, d_interferer_list), s , n).subs({s:1})
+        bb = diff(function_SINR(s, d_ij, d_interferer_list, noise_power), s , n).subs({s:1})
         print('bb is {}'.format(bb))
         res += aa*bb
     outage_probability = 1- res
@@ -288,20 +288,20 @@ if __name__ == '__main__':
     # res = calculate_SINR_outage_probability(m)
     m = 4
     gamma = 1
-    W = 0.0001
+    noise_power = 0.0001
     d_ij = 30
-    d_interferer_list = [15, 35]
+    d_interferer_list = [ 35, 20]
     alpha = 2.5
     Pt = 1.5
     # s = symbols('s', real=True)
-    k = (m*gamma*W)/(Pt* pow(d_ij, -alpha))
+    k = (m*gamma*noise_power)/(Pt* pow(d_ij, -alpha))
     b = gamma*pow((d_ij/25),-alpha)
     s = symbols('s')
-    f = function_SINR(s, d_ij, d_interferer_list)
+    f = function_SINR(s, d_ij, d_interferer_list, noise_power)
     # r = diff(f, s, 4).subs({s:1})
     # print(r)
 
-    res = calculate_SINR_outage_probability(m, d_ij, d_interferer_list)
+    res = calculate_SINR_outage_probability(m, d_ij, d_interferer_list, noise_power)
     print('链路的故障概率为{}'.format(res))
 
     # res = diff(f,s,2)

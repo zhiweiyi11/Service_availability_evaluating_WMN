@@ -123,6 +123,37 @@ def generate_PPP_distribution(area_size,  lam, save_data):
 
     return Coordinates
 
+def generate_poisson_point_process(lamda, area_size, save_data):
+    # 由chat-gpt生成
+    # parameters: lamda : Density of points; area_size: Size of the 2-D area
+
+    num_points = np.random.poisson(lamda * area_size[0]*area_size[1])
+    pos_x = np.random.uniform(0, area_size[0], size=num_points) # 直接生成二维的数据(num_points, 2)
+    pos_y = np.random.uniform(0, area_size[1], size=num_points)
+    np.column_stack((pos_x * area_size[0], pos_y * area_size[1]))
+    node_coordinates = np.column_stack( (pos_x, pos_y) )
+
+    Coordinates = dict(zip(range(len(node_coordinates)), node_coordinates))
+
+    # Plot points
+    plt.scatter(pos_x, pos_y, color='b', alpha=0.8)
+    plt.xlim(0, area_size[0])
+    plt.ylim(0, area_size[1])
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title('Poisson Point Process')
+    plt.grid(True)
+    plt.show()
+
+    if save_data == True:
+        df = pd.DataFrame(Coordinates)
+        with pd.ExcelWriter( r'..\Results_Saving\Node_Coordinates_PPP[lambda={}].xlsx'.format(lam)) as writer:
+            df.T.to_excel(writer, sheet_name='Node_Coordinates')
+            print("数据成功保存")
+
+    return Coordinates
+
+
 def generate_Mesh_topo(num_nodes):
     # 生成MESH拓扑的网络
     G = nx.grid_2d_graph(num_nodes, num_nodes)  # 5x5 grid
@@ -221,8 +252,10 @@ if __name__ == '__main__':
     Apps = {}
     # save_AppInfo(Apps, 'App_100_randomTopo')
     area_size = [150, 150]
-    num_nodes = 10
-    # Coordinates_sample = generate_PPP_distribution(area_size, num_nodes)
-    Coord = generate_mesh(150, 150, 15)
-    G = generate_Mesh_topo(num_nodes)
+    num_nodes = 180
+    lam = 0.005
+    Coordinates_sample = generate_PPP_distribution(area_size, num_nodes, save_data=False)
+    Coordinates_PPP = generate_poisson_point_process(lam, area_size, save_data=False)
+    # Coord = generate_mesh(150, 150, 15)
+    # G = generate_Mesh_topo(num_nodes)
     # G = nx.grid_2d_graph(Coord)
