@@ -288,7 +288,7 @@ def load_allocate(G, evo_time, app_new_path, app_demand, app_original_load, app_
         link_available_cap = G.adj[app_new_path[i]][app_new_path[i+1]]['capacity'] - G.adj[app_new_path[i]][app_new_path[i+1]]['load']
         # print('链路剩余可用容量为{}'.format(link_available_cap))
         if link_available_cap < app_demand:
-            if link_available_cap < 0.001:
+            if link_available_cap < 0.1:
                 print('当前链路的剩余可用容量为{}'.format(link_available_cap))
                 print('app_new path is {}'.format(app_new_path))
                 print('瓶颈链路为{}\n'.format([app_new_path[i],app_new_path[i+1]]))

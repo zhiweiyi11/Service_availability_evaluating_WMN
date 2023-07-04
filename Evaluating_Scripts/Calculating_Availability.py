@@ -74,7 +74,7 @@ def single_availability(App_set, T, beta, demand_threshold):
         Single_app_avail[app_id] = beta*app_time_avail + (1-beta)*app_performance_avail
         if Single_app_avail[app_id] < 0.9:
             print('业务{}的性能可用度为{}'.format(app_id, app_out['degradation']))
-            print('业务{}的时间可用度为{}'.format(app_id, app_out['repair']))
+            print('业务{}的修复时长为{}'.format(app_id, app_out['repair']))
 
 
     # 计算整网的平均服务可用度
@@ -286,8 +286,8 @@ if __name__ == '__main__':
 
 
     # 业务可用性评估的参数
-    T = 8760
-    MTTF, MLife = 1000, 800
+    T = 30*24
+    MTTF, MLife = 2000, 800
     MTTR = 4
     ## 重路由相关的参数
     message_processing_time = 0.05 # 单位为秒s [毫秒量级]
@@ -303,7 +303,7 @@ if __name__ == '__main__':
         # Apps[i].str = 'Global'
 
     # 业务可用度评估计算
-    N = 1 # 网络演化的次数
+    N = 100 # 网络演化的次数
 
     # app_results = calculateAvailability(T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time,  path_calculating_time, beta, demand_th)
     st = time.time()

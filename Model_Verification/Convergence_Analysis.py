@@ -23,6 +23,7 @@ from Evolution_Model.Evolution_Conditions import *
 from Evolution_Model.Evolution_Rules import *
 from Evolution_Model.Application_request_generating import *
 from Evaluating_Scripts.Calculating_Availability import *
+from Evaluating_Scripts.MTBF_sensitivity_analysis import *
 from concurrent.futures import ThreadPoolExecutor
 
 def calculating_Coefficient_of_Variation(sample_data):
@@ -33,24 +34,28 @@ def calculating_Coefficient_of_Variation(sample_data):
 	return cv
 
 
-def convergence_analysis(N, T, G, App,  MTTF, MLife, MTTR, switch_time, switch_rate, survival_time):
+def convergence_analysis(N, T, G, Apps, App_priority_list):
 	# 模型业务可用度计算结果的收敛性分析，对每一个业务都保存其仿真的可用度结果
-	app_cv_df = pd.DataFrame(index=App.keys()) # 每行为业务的id，每列存储业务可用度的方差系数
-	app_loss_df = pd.DataFrame(index=App.keys()) # 存储n次演化下各业务带宽损失的均值
+	sla_avail_df = pd.DataFrame(index=App_priority_list) # 每行为业务的id，每列存储业务可用度的方差系数
+	whole_avail_df = pd.DataFrame(index=['整网平均']) # 存储n次演化下各业务带宽损失的均值
 	""" ## 多次演化下的业务可用度结果 """
 	for n in range(10, N):
 		st2_ = time.time()
-		pool_num = 10
-		args = [T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time]
-		Availability_Results, Loss_Results = Apps_Availability_Count(n, calculateAvailability, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
-		app_avail = Availability_Results.apply(calculating_Coefficient_of_Variation, axis=1)  # 对每一行数据进行求变异系数，即得到N次演化下各等级业务的方差系数
-		app_cv_df.loc[:, n] = app_avail
-		app_loss_df.loc[:, n] = Loss_Results.mean(axis=1) # 对每一行数据求均值
+
+		# Availability_Results, Loss_Results = Apps_Availability_MC(n, calculateAvailability, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
+		single_results, whole_results = Apps_Availability_MC(n, T, G, Apps, MTTF, MLife, MTTR, detection_rate,message_processing_time, path_calculating_time, beta_list, demand_th)
+		single_avail = single_results.apply(calculating_Coefficient_of_Variation, axis=1)  # 对每一行数据进行求变异系数，即得到N次演化下各等级业务的方差系数
+		whole_avail = whole_results.apply(calculating_Coefficient_of_Variation, axis=1)
+
+		sla_avail = calculate_SLA_results(Apps, single_avail, App_priority_list) # 对SLA下所有业务的方差系数求平均值作为该SLA等级业务可用度的方差系数
+
+		sla_avail_df.loc[:, n] = pd.Series(sla_avail)
+		whole_avail_df.loc[:, n] = whole_avail['evo_times'] # 对每一行数据求均值
 
 		et2_ = time.time()
 		print('\n 第{}次演化下并行计算的时长为{}s'.format(n, et2_ - st2_))
 
-	return app_cv_df, app_loss_df
+	return sla_avail_df, whole_avail_df
 
 
 
@@ -59,55 +64,65 @@ def save_results(origin_df, file_name):
 	# 将dataframe中的数据保存至excel中
 	# localtime = time.asctime(time.localtime(time.time()))
 	time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')  # 记录数据存储的时间
-	sys_path = os.path.abspath('..')  # 表示当前所处文件夹上一级文件夹的绝对路径
+	# sys_path = os.path.abspath('..')  # 表示当前所处文件夹上一级文件夹的绝对路径
 
-	with pd.ExcelWriter(sys_path + r'.\Results_saving\{}_time{}.xlsx'.format(file_name, time2)) as xlsx:  # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。
+	with pd.ExcelWriter( r'..\Results_Output\{}_time{}.xlsx'.format(file_name, time2)) as xlsx:  # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。
 		origin_df.to_excel(xlsx, sheet_name='app_avail', index=False)  # 不显示行索引
 		print('数据成功保存')
 
 
 if __name__ == '__main__':
 	# 网络演化对象的输入参数；
-	## 网络层对象
-	Topology = 'Random'
-	Node_num, App_num = 100, 50
-	Capacity = 50
-	Area_width, Area_length = 250, 150
-	Area_size = (250, 150)
+	# 网络演化对象的输入参数；
+	save_data = False  # 是否保存节点坐标数据
+	Node_num = 100
+	Area_size = (150, 150)
+	Area_width, Area_length = 150, 150
+	Coordinates = generate_positions(Node_num, Area_width, Area_length, save_data)
 
-	TX_range = 50  # 传输范围为区域面积的1/5时能够保证网络全联通
-	CV_range = 30
-	Coordinates = generate_positions(Node_num, Area_width, Area_length)
-	# Demand = list(map(int, Demand)) # 将业务的带宽需求换成整数
+	# TX_range = 50 # 传输范围为区域面积的1/5时能够保证网络全联通
+	transmit_prob = 0.1  # 节点的传输概率
+	transmit_power = 1.5  # 发射功率(毫瓦)，统一单位：W
+	path_loss = 2  # 单位：无
+	noise = pow(10, -11)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
+	bandwidth = 10 * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz
+	lambda_TH = 8 * pow(10, -1)  # 接收器的敏感性阈值,用于确定节点的传输范围
+	# TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss)
+	TX_range = 30
+	CV_range = 30  # 节点的覆盖范围
 
-	## 业务层对象
-	grid_size = 5
-	traffic_th = 0.5
-	Demand = np.random.normal(loc=10, scale=2, size=App_num)  # 生成平均值为5，标准差为1的带宽的正态分布
-	Priority = np.linspace(start=1, stop=5, num=5, dtype=int)
-	ratio_str = 1  # 尽量分离和尽量重用的业务占比
-	Strategy_P = ['Global'] * int(App_num * (1 - ratio_str))
-	Strategy_S = ['Local'] * int(App_num * ratio_str)
-	Strategy = Strategy_S + Strategy_P
+	import_file = False  # 不从excel中读取网络拓扑信息
+	Topology = 'Random_SINR'
+	# 从文件中创建网络和业务对象
+	Network_parameters = [Topology, transmit_prob]
+	Wireless_parameters = [TX_range, transmit_power, bandwidth]
+	Loss_parameters = [path_loss, noise]
 
-	# 演化条件的参数
-	T = 8760*10
-	MTTF, MLife = 3000, 2000
-	MTTR = 2
+	topology_file = 'Topology_100_Band=10[for_priority_analysis]'
+	coordinates_file = 'Node_Coordinates_100_Uniform[for_priority_analysis]'
+	app_file = 'App_50_Demand=2_inTopo=100[for_priority_analysis]'
+	G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters,  Wireless_parameters, Loss_parameters)
 
+	# 业务可用性评估的参数
+	T = 30 * 24
+	MTTF, MLife = 2000, 800
+	MTTR = 4
 	## 重路由相关的参数
-	switch_time = 10 # 单位为秒
-	switch_rate = 0.99
-	survival_time = 3 * switch_time  # 允许的最大重路由次数为5次
-
-	# 初始化网络演化对象
-	start_time = time.time()
-	G, App = init_func(True, 'App_Info_Local', Area_size, Node_num, Topology, TX_range, CV_range, Coordinates, Capacity, grid_size, App_num, traffic_th, Demand, Priority, Strategy)
+	message_processing_time = 0.05  # 单位为秒s [毫秒量级]
+	path_calculating_time = 5  # 单位为秒 s [秒量级]
+	detection_rate = 0.99
+	demand_th = 1 * 0.2  # 根据App_demand中的均值来确定
+	beta_list = [0.5]  # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
+	App_priority_list = [1, 2, 3, 4, 5]
+	app_priority = App_priority_list * int(len(Apps) / len(App_priority_list))
+	random.shuffle(app_priority)
+	for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
+		Apps[i].SLA = app_priority[i]
 
 	# 收敛性分析的参数
 	N = 20
 
-	Con_Results = convergence_analysis(N, T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
+	Con_Results = convergence_analysis(N, T, G, Apps, App_priority_list)
 
 	# 绘制收敛性分析的结果图
 	font = {'family': 'serif',
@@ -144,4 +159,4 @@ if __name__ == '__main__':
 
 	# 结果保存
 	save_results(Con_Results[0], '{}次仿真的服务可用度方差系数'.format(N))
-	save_results(Con_Results[1], '{}次仿真的服务带宽损失均值'.format(N))
+	# save_results(Con_Results[1], '{}次仿真的服务带宽损失均值'.format(N))
