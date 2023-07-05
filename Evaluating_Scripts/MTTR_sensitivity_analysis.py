@@ -118,8 +118,8 @@ def priority_analysis(MTTR_list, App_priority_list, G, Apps):
 
 def resource_analysis(MTTR_list, File_name_list):
     # 计算不同网络带宽和业务请求下的业务可用度
-    N = 20
-    T = 8760
+    # N = 20
+    # T = 8760
 
     beta_list = [0.5]
     App_priority_list = [1]
@@ -162,8 +162,8 @@ def resource_analysis(MTTR_list, File_name_list):
 
 def performance_analysis(MTTR_list, Beta_list, G, Apps):
     # 计算不同性能比重下的服务可用度
-    N = 20
-    T = 8760
+    # N = 20
+    # T = 8760
     availability_different_beta_local = pd.DataFrame(index = Beta_list)
     availability_different_beta_global = pd.DataFrame(index = Beta_list)
 
@@ -269,10 +269,10 @@ if __name__ == '__main__':
     Loss_parameters = [path_loss, noise]
 
     ## 服务可用性评估相关的参数
-    N = 2
-    T = 8760
-    message_processing_time = 0.01 # 单位为秒 s
-    path_calculating_time = 0.5 # 单位为秒 s
+    N = 100
+    T = 30 * 24 # 一个月
+    message_processing_time = 0.5 # 单位为秒 s
+    path_calculating_time = 5 # 单位为秒 s
     detection_rate = 0.99
     demand_th = 1*0.2 # 根据App_demand中的均值来确定
     beta_list = [0.5] # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
@@ -284,4 +284,4 @@ if __name__ == '__main__':
 
     G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
 
-    priority_analysis(MTTR_list, App_priority_list, G, Apps)
+    local_res, global_res = priority_analysis(MTTR_list, App_priority_list, G, Apps)

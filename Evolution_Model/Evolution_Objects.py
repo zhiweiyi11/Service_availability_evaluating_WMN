@@ -617,7 +617,7 @@ def init_function_from_file(Topology_file, Coord_file, AppDict_file, Network_par
     TX_range, transmit_power, bandwidth = Wireless_parameters[0], Wireless_parameters[1], Wireless_parameters[2]
     path_loss, noise = Loss_parameters[0], Loss_parameters[1]
     G = Network(Topology, TX_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, True, Topology_file)
-    G.draw_topo(Coordinates)
+    # G.draw_topo(Coordinates)
 
     AppDict = load_AppInfoFromExcel(AppDict_file)
 
