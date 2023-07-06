@@ -236,7 +236,7 @@ def draw_line_plot(x_data, y_data, file_name):
         for i in y_data.index:
             ax1.plot(x_data, y_data.loc[i], label='${}$'.format(i)) # i+1表示业务等级 c=colors[i]
     else:
-        ax1.plot(x_data, y2_data)
+        ax1.plot(x_data, y_data)
     ax1.set_xlabel('MTTR of components')
     ax1.set_ylabel('Service Availability')
     # plt.legend(title="Priority")

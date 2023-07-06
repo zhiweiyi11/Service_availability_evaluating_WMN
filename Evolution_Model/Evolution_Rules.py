@@ -192,7 +192,7 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
         if new_app_path: # 如果路径存在
             reroute_duration = (rerouting_app_num + (fail_node_index + 1) + 2 * len(new_app_path)) * message_processing_time + rerouting_app_num * path_calculating_time
         else:
-            print('业务原路径{}重路由计算不成功，可选的路径集合为{}'.format(original_path_length, new_app_path_optional))
+            print('业务重路由计算不成功, 原路径长度为{}，可选的路径集合为{}'.format(original_path_length, new_app_path_optional))
 
     '''业务的Local重路由策略'''
     if app_strategy == 'Local':

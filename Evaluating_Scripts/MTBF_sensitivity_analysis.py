@@ -51,27 +51,185 @@ def calculate_SLA_results(Apps, multi_app_res, app_priority_list):
         SLA_res[SLA] = np.mean(Ave_SLA) # 对SLA等级下的所有业务可用度的均值再求均值，作为该等级下的业务可用度
     return SLA_res
 
-def calculate_MTBF_analysis(MTTF_list, N, G, App_set, App_priority_list):
+
+def calculate_MTTF_analysis(MTTF_list, N, G, Apps, App_priority_list, beta_list):
     # 业务可用性的MTTF敏感性分析
     MLife = 800
-    mttf_single_avail = pd.DataFrame(index=[1,2,3]) # 存储业务可用度数据的行索引为各SLA的值
+    mttf_single_avail = pd.DataFrame(index=App_priority_list) # 存储业务可用度数据的行索引为各SLA的值
     mttf_whole_avail = pd.DataFrame(index=['{}次演化'.format(N)]) # 存储业务可用度数据的行索引为演化次数的值
 
     for mttf in MTTF_list:
         print('当前计算的MTTF值为{} \n'.format(mttf))
-
         start_time = time.time()
-        res = Apps_Availability_MC(N, T,  G, App_set, mttf, MLife, MTTR, detection_rate, message_processing_time,   path_calculating_time, beta, demand_th)
+        sla_avail, whole_avail = Apps_Availability_MC(N, T,  G, Apps, mttf, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
 
-        SLA_avail = calculate_SLA_results(App_set, res[0], App_priority_list)
+        SLA_avail = calculate_SLA_results(Apps, sla_avail, App_priority_list)
         # whole_avail = res[1].apply(np.mean, axis=1) # 对dataframe中的每一行应用求平均值
-        whole_avail = np.mean(res[1].iloc[0].tolist())
+        whole_ave = np.mean(whole_avail.iloc[0].tolist())
         mttf_single_avail.loc[:, mttf] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
-        mttf_whole_avail.loc[:, mttf] = whole_avail
+        mttf_whole_avail.loc[:, mttf] = whole_ave
 
     return mttf_single_avail, mttf_whole_avail
+
+def priority_analysis(MTTF_list, App_priority_list, G, Apps):
+    # 计算不同优先级下的业务可用度
+    # N = 20 # 网络演化次数
+    # T = 8760 # 网络演化的时长
+    beta_list = [0.5]
+    app_priority = App_priority_list * int(len(Apps) / len(App_priority_list))  # 乘以每类SLA等级下的业务数量
+    random.shuffle(app_priority)
+    for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
+        Apps[i].SLA = app_priority[i]
+
+    availability_different_priority_local = pd.DataFrame(index=App_priority_list) # 存储结果
+    availability_different_priority_global = pd.DataFrame(index=App_priority_list) # 存储结果
+
+
+    for mttf in MTTF_list:
+        print('当前计算的MTTF值为{} \n'.format(mttf))
+        start_time = time.time()
+        SLA_avail, whole_avail = Apps_Availability_MC(N, T,  G, Apps, mttf, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
+        end_time = time.time()
+        print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
+
+        SLA_avail = calculate_SLA_results(Apps, SLA_avail, App_priority_list)
+        availability_different_priority_local.loc[:, mttf] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
+
+    save_results(availability_different_priority_local, 'MTTF敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
+    draw_line_plot(MTTF_list, availability_different_priority_local, 'MTTF敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
+
+    for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
+        Apps[i].str = 'Global'  # 将业务的策略设置为Global
+
+    for mttf in MTTF_list:
+
+        print('当前计算的MTTF值为{} \n'.format(mttf))
+        start_time = time.time()
+        SLA_avail, whole_avail = Apps_Availability_MC(N, T,  G, Apps, mttf, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
+        end_time = time.time()
+        print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
+
+        SLA_avail = calculate_SLA_results(Apps, SLA_avail, App_priority_list)
+        availability_different_priority_global.loc[:, mttf] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
+
+    save_results(availability_different_priority_global, 'MTTF敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
+    draw_line_plot(MTTF_list, availability_different_priority_global, 'MTTF敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
+
+    return availability_different_priority_local, availability_different_priority_global
+
+def resource_analysis(MTTF_list, File_name_list):
+    # 计算不同网络带宽和业务请求下的业务可用度
+    # N = 20
+    # T = 8760
+
+    beta_list = [0.5]
+    App_priority_list = [1]
+
+    availability_different_demand_local = pd.DataFrame(index=MTTF_list) # 存储结果，每一行对应某个网络和业务需求
+    availability_different_demand_global = pd.DataFrame(index = MTTF_list)
+
+    # Coordinates_file_name = 'Node_Coordinates_100_Uniform' #
+    directory_path = '\\Different_resource_demand_Topology_100+App_30\\'
+    Coordinates_file_name =  directory_path + 'Node_Coordinates_100_Uniform'
+    file_name_list = [['Topology_100_Band=10', 'App_30_Demand=2'], ['Topology_100_Band=10', 'App_30_Demand=5'],
+                      ['Topology_100_Band=20', 'App_30_Demand=2'],
+                      ['Topology_100_Band=20', 'App_30_Demand=5']]  # 待读取的文件列表
+
+
+    for file_name in file_name_list:
+        print('当前计算的网络和业务规模为{} \n'.format(file_name))
+        topology_file = file_name[0]
+        app_file = file_name[1]
+        G, Apps = init_function_from_file(topology_file, Coordinates_file_name, app_file,  Network_parameters, Wireless_parameters, Loss_parameters)
+        for app_id in range(len(Apps)):
+            Apps[app_id].SLA = 1 # 将所有业务等级设置为相同
+            print('业务的优先级为{}'.format(Apps[app_id].SLA))
+
+        t1 = time.time()
+        sla_avail_1, whole_avail_1 = calculate_MTTF_analysis(MTTF_list, N, G, Apps, App_priority_list, beta_list)
+        save_results(whole_avail_1, 'MTTF敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
+        availability_different_demand_local.loc[ :, file_name] = whole_avail_1.T # 每一列存储各文件对应的整网服务可用度
+        t2 = time.time()
+        print('\n 当前{}策略计算的总时长为{}h'.format(Apps[0].str, (t2 - t1) / 3600))
+
+        # 将业务的策略修改为Global
+        for app_id in range(len(Apps)):
+            Apps[app_id].str = 'Global'
+
+        t3 = time.time()
+        sla_avail_2, whole_avail_2 = calculate_MTTF_analysis(MTTF_list, N, G, Apps, App_priority_list, beta_list)
+        save_results(whole_avail_2, 'MTTF敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
+        availability_different_demand_global.loc[:, file_name] = whole_avail_2.T
+
+        t4 = time.time()
+        print('\n 当前{}策略计算的总时长为{}h'.format(Apps[0].str, (t3 - t4) / 3600))
+
+    return availability_different_demand_local, availability_different_demand_global
+
+
+def performance_analysis(MTTF_list, Beta_list, G, Apps):
+    # 计算不同性能比重下的服务可用度
+    # N = 20
+    # T = 8760
+    availability_different_beta_local = pd.DataFrame(index = Beta_list)
+    availability_different_beta_global = pd.DataFrame(index = Beta_list)
+
+
+    for app_id in range(len(Apps)): # 将业务优先级统一为1
+        Apps[app_id].SLA = 1
+
+    for mttf in MTTF_list:
+        print('当前计算的MTTR值为{} \n'.format(mttf))
+        start_time = time.time()
+        multi_meta_avail = pd.DataFrame(index= Beta_list)
+
+        for n in range(N):
+            st_time = time.time()
+            G_tmp = copy.deepcopy(G)
+            App_tmp = copy.deepcopy(Apps)
+            SLA_avail, whole_avail  = calculateAvailability(T, G_tmp, App_tmp, mttf, MLife, MTTR, detection_rate,
+                                           message_processing_time, path_calculating_time, Beta_list, demand_th)
+            multi_meta_avail.loc[:, n + 1] = pd.Series(whole_avail)  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
+            ed_time = time.time()
+            print('\n 当前为第{}次蒙卡仿真, 仿真时长为{}s'.format(n, ed_time - st_time))
+
+        availability_different_beta_local.loc[:, mttf] = multi_meta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
+
+        end_time = time.time()
+        print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
+
+    save_results(availability_different_beta_local, 'MTTF敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
+    draw_line_plot(MTTF_list, availability_different_beta_local, 'MTTF敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
+
+    for app_id in range(len(Apps)): # 将业务策略设置为GLobal
+        Apps[app_id].str = 'Global'
+
+    for mttf in MTTF_list:
+        print('当前计算的MTTF值为{} \n'.format(mttf))
+        start_time = time.time()
+        multi_meta_avail = pd.DataFrame(index= Beta_list)
+
+        for n in range(N):
+            st_time = time.time()
+            G_tmp = copy.deepcopy(G)
+            App_tmp = copy.deepcopy(Apps)
+            SLA_avail, whole_avail  = calculateAvailability(T, G_tmp, App_tmp, mttf, MLife, MTTR, detection_rate,
+                                           message_processing_time, path_calculating_time, Beta_list, demand_th)
+            multi_meta_avail.loc[:, n + 1] = pd.Series(whole_avail)  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
+            ed_time = time.time()
+            print('\n 当前为第{}次蒙卡仿真, 仿真时长为{}s'.format(n, ed_time - st_time))
+
+        availability_different_beta_global.loc[:, mttf] = multi_meta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
+
+        end_time = time.time()
+        print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
+
+    save_results(availability_different_beta_global, 'MTTF敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
+    draw_line_plot(MTTF_list, availability_different_beta_global, 'MTTF敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
+
+    return availability_different_beta_local, availability_different_beta_global
 
 def draw_line_plot(x_data, y_data, file_name):
     time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M') # 记录数据存储的时间
@@ -96,92 +254,73 @@ def draw_line_plot(x_data, y_data, file_name):
 
 if __name__ == '__main__':
     # 网络演化对象的输入参数；
-    save_data = False # 是否保存节点坐标数据
-    Node_num = 200
-    Area_size = (250, 250)
-    Area_width, Area_length = 250, 250
-    Coordinates = generate_positions(Node_num, Area_width, Area_length, save_data)
-
-    # TX_range = 50 # 传输范围为区域面积的1/5时能够保证网络全联通
+    # 生成简单的case测试各function是否能正常输出结果
+    ## 无线传输相关的参数
     transmit_prob = 0.1 # 节点的传输概率
     transmit_power = 1.5  # 发射功率(毫瓦)，统一单位：W
     path_loss = 2  # 单位：无
     noise = pow(10, -11)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
     bandwidth = 10 * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz
     lambda_TH = 8 * pow(10, -1)  # 接收器的敏感性阈值,用于确定节点的传输范围
-    # TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss)
     TX_range = 30
     CV_range = 30  # 节点的覆盖范围
-    # 网络演化对象的输入参数；
-    import_file = False # 不从excel中读取网络拓扑信息
     Topology = 'Random_SINR'
 
 
-    # 业务请求的参数
-    # App_num = 20
-    # grid_size = 5
-    # traffic_th = 0.5  # 业务网格的流量阈值
-    # App_Demand = np.random.normal(loc=3, scale=1, size=App_num)  # 生成平均值为5，标准差为1的业务带宽请求的整体分布
-    # App_Priority = [1, 2, 3,4,5]
-    # ratio_str = 1  # 尽量分离和尽量重用的业务占比
-    # Strategy_P = ['Global'] * int(App_num * (1 - ratio_str))
-    # Strategy_S = ['Local'] * int(App_num * ratio_str)
-    # App_Strategy = Strategy_S + Strategy_P
+    ## 1. 业务的优先级分析
+    App_priority_list = [1, 2, 3, 4, 5]
+    topology_file = 'Topology_100_Band=10[for_priority_analysis]'
+    coordinates_file =  'Node_Coordinates_100_Uniform[for_priority_analysis]'
+    app_file = 'App_50_Demand=2_inTopo=100[for_priority_analysis]'
 
-    # G = Network(Topology, transmit_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_file)
-    # G, Apps = init_func(G, Coordinates, Area_size, CV_range, grid_size, traffic_th, App_num, App_Demand, App_Priority, App_Strategy)
-    # 从文件中创建网络和业务对象
     Network_parameters = [Topology, transmit_prob]
     Wireless_parameters = [TX_range, transmit_power, bandwidth]
     Loss_parameters = [path_loss, noise]
 
-    G, Apps = init_function_from_file('Topology_100_Band=20', 'Node_Coordinates_100_Uniform','App_30_Demand=5', Network_parameters, Wireless_parameters, Loss_parameters)
 
-    # 将业务的策略修改为Global
-    # for app_id in range(len(Apps)):
-    #     Apps[app_id].str = 'Global'
-
-
-    # 业务可用性评估的参数
-    T = 8760
-    MTTF, MLife = 1000, 800
-    MTTR = 4
-    ## 重路由相关的参数
+    ## 服务可用性评估相关的参数
+    N = 50
+    # T = 30 * 24 # 一个月
+    T = 8760 # 一年时长
     message_processing_time = 0.05 # 单位为秒 50ms
     path_calculating_time = 5 # 单位为秒 s
     detection_rate = 0.99
     demand_th = 1*0.2 # 根据App_demand中的均值来确定
-    beta = 0.5 # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
+    beta_list = [0.5] # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
 
-    # 业务可用度评估计算
-    N = 50 # 网络演化的次数
-    # MTTF, MLife = 1000, 800
-    MTBF_list = np.linspace(1000, 2000, 51) # 100个点
+    # MTTF = 2000
+    MTTR = 4
+    MLife = 800
+    MTTF_list = np.linspace(1000, 2000, 41) # 20个点
 
-    Res = calculate_MTBF_analysis(MTBF_list, N, G, Apps)
+
+    G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
+
+    # local_res, global_res = priority_analysis(MTTF_list, App_priority_list, G, Apps)
+    resource_analysis(MTTF_list, File_name_list)
 
 
     # 对计算结果进行图形化的展示
-    time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M') # 记录数据存储的时间
-
-    x_data = MTBF_list
-    y_data = Res[0] # 不同SLA下的业务可用度
-    y2_data = Res[1]
-
-    fig1, ax1 = plt.subplots()
-    fig1.subplots_adjust(hspace=0.5) # make a little extra space between the subplots
-    colors = ['gold','blue','green'] # ,'orangered','hotpink'
-    for i in range(len(colors)):
-        ax1.plot(x_data, y_data.loc[i+1], c=colors[i], label='${}$'.format(i+1)) # i+1表示业务等级
-    # ax1.plot(x_data, y2_data.iloc[0], label='whole network')
-    ax1.set_xlabel('MTTF of components')
-    ax1.set_ylabel('Service Availability')
-    plt.legend(loc="upper right", title="Priority")
-    plt.savefig(r'..\Pictures_Saved\line_plot_{}.jpg'.format('MTTF敏感性分析[Band=20,Demand=5]-Local演化N={}次-节点数量为{}'.format(N, len(G)), dpi=1200))
-
-    plt.show()
-
-    save_results(Res[0], 'MTTF敏感性分析[Band=20,Demand=5]-Local演化N=10次,100节点的拓扑')
+    # time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M') # 记录数据存储的时间
+    #
+    # x_data = MTTF_list
+    # y_data = Res[0] # 不同SLA下的业务可用度
+    # y2_data = Res[1]
+    #
+    # fig1, ax1 = plt.subplots()
+    # fig1.subplots_adjust(hspace=0.5) # make a little extra space between the subplots
+    # colors = ['gold','blue','green'] # ,'orangered','hotpink'
+    # for i in range(len(colors)):
+    #     ax1.plot(x_data, y_data.loc[i+1], c=colors[i], label='${}$'.format(i+1)) # i+1表示业务等级
+    # # ax1.plot(x_data, y2_data.iloc[0], label='whole network')
+    # ax1.set_xlabel('MTTF of components')
+    # ax1.set_ylabel('Service Availability')
+    # plt.legend(loc="upper right", title="Priority")
+    # plt.savefig(r'..\Pictures_Saved\line_plot_{}.jpg'.format('MTTF敏感性分析[Band=20,Demand=5]-Local演化N={}次-节点数量为{}'.format(N, len(G)), dpi=1200))
+    #
+    # plt.show()
+    #
+    # save_results(Res[0], 'MTTF敏感性分析[Band=20,Demand=5]-Local演化N=10次,100节点的拓扑')
 
 
 
