@@ -22,7 +22,7 @@ def save_results(origin_df, file_name):
     # 保存仿真的数据
     # 将dataframe中的数据保存至excel中
     # localtime = time.asctime(time.localtime(time.time()))
-    time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M') # 记录数据存储的时间
+    time2 = datetime.datetime.now().strftime('%Y_%m_%d+%H_%M') # 记录数据存储的时间
     sys_path = os.path.abspath('..')  # 表示当前所处文件夹上一级文件夹的绝对路径
     #
     # with pd.ExcelWriter(r'..\Results_saved\{}_time{}.xlsx'.format(file_name, time2)) as xlsx: # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。
@@ -95,7 +95,6 @@ def priority_analysis(RecoveryRate_list, App_priority_list, G, Apps):
         availability_different_priority_local.loc[:, detection_rate] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
 
     save_results(availability_different_priority_local, 'RecoveryRate敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
-    draw_line_plot(RecoveryRate_list, availability_different_priority_local, 'RecoveryRate敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
 
 
     for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
@@ -112,6 +111,8 @@ def priority_analysis(RecoveryRate_list, App_priority_list, G, Apps):
         availability_different_priority_global.loc[:, detection_rate] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
 
     save_results(availability_different_priority_global, 'RecoveryRate敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
+
+    draw_line_plot(RecoveryRate_list, availability_different_priority_local, 'RecoveryRate敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
     draw_line_plot(RecoveryRate_list, availability_different_priority_global, 'RecoveryRate敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
 
     return availability_different_priority_local, availability_different_priority_global
@@ -119,8 +120,8 @@ def priority_analysis(RecoveryRate_list, App_priority_list, G, Apps):
 
 def resource_analysis(RecoveryRate_list, File_name_list):
     # 计算不同网络带宽和业务请求下的业务可用度
-    N = 20
-    T = 8760
+    # N = 50
+    # T = 8760
 
     beta_list = [0.5]
     App_priority_list = [1]
@@ -144,7 +145,7 @@ def resource_analysis(RecoveryRate_list, File_name_list):
 
         t1 = time.time()
         sla_avail_1, whole_avail_1 = calculate_RecoveryRate_analysis(RecoveryRate_list, N, G, Apps, App_priority_list, beta_list)
-        save_results(whole_avail_1, 'MTTF敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
+        save_results(whole_avail_1, 'RecoveryRate敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
         t2 = time.time()
         print('\n 当前{}策略计算的总时长为{}h'.format(Apps[0].str, (t2 - t1) / 3600))
 
@@ -154,7 +155,7 @@ def resource_analysis(RecoveryRate_list, File_name_list):
 
         t3 = time.time()
         sla_avail_2, whole_avail_2 = calculate_RecoveryRate_analysis(RecoveryRate_list, N, G, Apps, App_priority_list, beta_list)
-        save_results(whole_avail_2, 'MTTF敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
+        save_results(whole_avail_2, 'RecoveryRate敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
         t4 = time.time()
         print('\n 当前{}策略计算的总时长为{}h'.format(Apps[0].str, (t3 - t4) / 3600))
 
@@ -162,8 +163,8 @@ def resource_analysis(RecoveryRate_list, File_name_list):
 
 def performance_analysis(RecoveryRate_list, Beta_list, G, Apps):
     # 计算不同性能比重下的服务可用度
-    N = 20
-    T = 8760
+    # N = 50
+    # T = 8760
     availability_different_beta_local = pd.DataFrame(index = Beta_list)
     availability_different_beta_global = pd.DataFrame(index = Beta_list)
 
@@ -191,6 +192,9 @@ def performance_analysis(RecoveryRate_list, Beta_list, G, Apps):
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
 
+    save_results(availability_different_beta_local, 'RecoveryRate敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str,  N, len(G)))
+
+
     for app_id in range(len(Apps)): # 将业务重路由策略改为Global
         Apps[app_id].str = 'Global'
 
@@ -215,6 +219,10 @@ def performance_analysis(RecoveryRate_list, Beta_list, G, Apps):
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
 
+    save_results(availability_different_beta_local, 'RecoveryRate敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str,  N, len(G)))
+
+    return availability_different_beta_local, availability_different_beta_global
+
 
 
 def draw_line_plot(x_data, y_data, file_name):
@@ -230,7 +238,7 @@ def draw_line_plot(x_data, y_data, file_name):
         for i in y_data.index:
             ax1.plot(x_data, y_data.loc[i], label='${}$'.format(i)) # i+1表示业务等级 c=colors[i]
     else:
-        ax1.plot(x_data, y2_data)
+        ax1.plot(x_data, y_data)
     ax1.set_xlabel('Restoration success rate')
     ax1.set_ylabel('Service Availability')
     # plt.legend(title="Priority")

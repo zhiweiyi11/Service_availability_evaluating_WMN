@@ -91,7 +91,7 @@ def calculate_RestorationTime_analysis(RestorationTime_list, N, G, Apps, App_pri
 
 def priority_analysis(RestorationTime_list, App_priority_list, G, Apps):
     # 计算不同优先级下的业务可用度
-    # N = 20 # 网络演化次数
+    # N = 50 # 网络演化次数
     # T = 8760 # 网络演化的时长
     beta_list = [0.5]
     app_priority = App_priority_list * int(len(Apps) / len(App_priority_list))  # 乘以每类SLA等级下的业务数量
@@ -113,7 +113,6 @@ def priority_analysis(RestorationTime_list, App_priority_list, G, Apps):
         availability_different_priority_local.loc[:, path_calculating_time] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
 
     save_results(availability_different_priority_local, 'RestorationTime敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
-    draw_line_plot(RestorationTime_list, availability_different_priority_local, 'RestorationTime敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
 
     for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
         Apps[i].str = 'Global'  # 将业务的策略设置为Global
@@ -130,13 +129,15 @@ def priority_analysis(RestorationTime_list, App_priority_list, G, Apps):
         availability_different_priority_global.loc[:, path_calculating_time] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
 
     save_results(availability_different_priority_global, 'RestorationTime敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
+
+    draw_line_plot(RestorationTime_list, availability_different_priority_local, 'RestorationTime敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
     draw_line_plot(RestorationTime_list, availability_different_priority_global, 'RestorationTime敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
 
     return availability_different_priority_local, availability_different_priority_global
 
 def resource_analysis(RestorationTime_list, File_name_list):
     # 计算不同网络带宽和业务请求下的业务可用度
-    N = 20
+    N = 50
     T = 8760
 
     beta_list = [0.5]
