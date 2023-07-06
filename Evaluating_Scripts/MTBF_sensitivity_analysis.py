@@ -86,7 +86,7 @@ def draw_line_plot(x_data, y_data, file_name):
         for i in y_data.index:
             ax1.plot(x_data, y_data.loc[i], label='${}$'.format(i)) # i+1表示业务等级 c=colors[i]
     else:
-        ax1.plot(x_data, y2_data)
+        ax1.plot(x_data, y_data)
     ax1.set_xlabel('MTTF of components')
     ax1.set_ylabel('Service Availability')
     # plt.legend(title="Priority")
@@ -145,7 +145,7 @@ if __name__ == '__main__':
     # 业务可用性评估的参数
     T = 8760
     MTTF, MLife = 1000, 800
-    MTTR = 2
+    MTTR = 4
     ## 重路由相关的参数
     message_processing_time = 0.05 # 单位为秒 50ms
     path_calculating_time = 5 # 单位为秒 s
