@@ -269,9 +269,10 @@ if __name__ == '__main__':
     Loss_parameters = [path_loss, noise]
 
     ## 服务可用性评估相关的参数
-    N = 100
-    T = 30 * 24 # 一个月
-    message_processing_time = 0.5 # 单位为秒 s
+    N = 50
+    # T = 30 * 24 # 一个月
+    T = 8760
+    message_processing_time = 0.05 # 单位为秒 50ms
     path_calculating_time = 5 # 单位为秒 s
     detection_rate = 0.99
     demand_th = 1*0.2 # 根据App_demand中的均值来确定
@@ -279,7 +280,7 @@ if __name__ == '__main__':
 
     MTTF = 2000
     MLife = 800
-    MTTR_list = np.linspace(2, 20, 19) # 20个点
+    MTTR_list = np.linspace(2, 10, 41) # 20个点
 
 
     G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)

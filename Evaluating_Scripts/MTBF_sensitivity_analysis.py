@@ -147,14 +147,14 @@ if __name__ == '__main__':
     MTTF, MLife = 1000, 800
     MTTR = 2
     ## 重路由相关的参数
-    message_processing_time = 0.01 # 单位为秒 s
-    path_calculating_time = 0.5 # 单位为秒 s
+    message_processing_time = 0.05 # 单位为秒 50ms
+    path_calculating_time = 5 # 单位为秒 s
     detection_rate = 0.99
     demand_th = 1*0.2 # 根据App_demand中的均值来确定
     beta = 0.5 # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
 
     # 业务可用度评估计算
-    N = 20 # 网络演化的次数
+    N = 50 # 网络演化的次数
     # MTTF, MLife = 1000, 800
     MTBF_list = np.linspace(1000, 2000, 51) # 100个点
 

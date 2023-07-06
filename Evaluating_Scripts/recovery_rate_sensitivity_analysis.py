@@ -261,10 +261,10 @@ if __name__ == '__main__':
     Loss_parameters = [path_loss, noise]
 
     ## 服务可用性评估相关的参数
-    N = 5
+    N = 50
     T = 8760
-    message_processing_time = 0.01  # 单位为秒 s
-    path_calculating_time = 0.5  # 单位为秒 s
+    message_processing_time = 0.05 # 单位为秒 s
+    path_calculating_time = 5  # 单位为秒 s
     # detection_rate = 0.99 # 故障检测率
     demand_th = 1 * 0.2  # 根据App_demand中的均值来确定
     beta_list = [0.5]  # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)

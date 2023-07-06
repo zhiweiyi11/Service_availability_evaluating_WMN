@@ -303,7 +303,7 @@ if __name__ == '__main__':
         # Apps[i].str = 'Global'
 
     # 业务可用度评估计算
-    N = 100 # 网络演化的次数
+    N = 50 # 网络演化的次数
 
     # app_results = calculateAvailability(T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time,  path_calculating_time, beta, demand_th)
     st = time.time()
