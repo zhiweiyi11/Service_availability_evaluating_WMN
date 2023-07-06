@@ -296,8 +296,10 @@ if __name__ == '__main__':
 
     G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
 
-    # local_res, global_res = priority_analysis(MTTF_list, App_priority_list, G, Apps)
-    resource_analysis(MTTF_list, File_name_list)
+    local_res, global_res = priority_analysis(MTTF_list, App_priority_list, G, Apps)
+
+    # File_name_list = '暂无，从函数中内置了待读取的文件列表'
+    # local_, global_ = resource_analysis(MTTF_list, File_name_list)
 
 
     # 对计算结果进行图形化的展示
