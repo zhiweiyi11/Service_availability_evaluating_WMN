@@ -23,7 +23,7 @@ def save_results(origin_df, file_name):
     # 保存仿真的数据
     # 将dataframe中的数据保存至excel中
     # localtime = time.asctime(time.localtime(time.time()))
-    time2 = datetime.datetime.now().strftime('%Y_%m_%d_') # 记录数据存储的时间
+    time2 = datetime.datetime.now().strftime('%Y_%m_%d_+%H_%M') # 记录数据存储的时间
     sys_path = os.path.abspath('..')  # 表示当前所处文件夹上一级文件夹的绝对路径
     #
     # with pd.ExcelWriter(r'..\Results_saved\{}_time{}.xlsx'.format(file_name, time2)) as xlsx: # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。

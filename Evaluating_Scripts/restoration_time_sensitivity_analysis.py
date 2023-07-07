@@ -21,7 +21,7 @@ def save_results(origin_df, file_name):
     # 保存仿真的数据
     # 将dataframe中的数据保存至excel中
     # localtime = time.asctime(time.localtime(time.time()))
-    time2 = datetime.datetime.now().strftime('%Y_%m_%d__%H:%M') # 记录数据存储的时间
+    time2 = datetime.datetime.now().strftime('%Y_%m_%d_+%H_%M') # 记录数据存储的时间
     # sys_path = os.path.abspath('..')  # 表示当前所处文件夹上一级文件夹的绝对路径
 
     # with pd.ExcelWriter(r'..\Results_saved\{}_time{}.xlsx'.format(file_name, time2)) as xlsx: # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。
@@ -179,7 +179,7 @@ def resource_analysis(RestorationTime_list, File_name_list):
 
 def performance_analysis(RestorationTime_list, Beta_list, G, Apps):
     # 计算不同性能比重下的服务可用度
-    N = 20
+    N = 50
     T = 8760
     availability_different_beta_local = pd.DataFrame(index = Beta_list)
     availability_different_beta_global = pd.DataFrame(index = Beta_list)
@@ -264,10 +264,10 @@ if __name__ == '__main__':
     Loss_parameters = [path_loss, noise]
 
     ## 服务可用性评估相关的参数
-    N = 3
+    N = 50
     T = 8760
     message_processing_time = 0.5  # 单位为秒 s
-    # path_calculating_time = 0.5  # 单位为秒 s
+    # path_calculating_time = 5  # 单位为秒 s
     detection_rate = 0.99
     demand_th = 1 * 0.2  # 根据App_demand中的均值来确定
     beta_list = [0.5]  # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)

@@ -90,7 +90,7 @@ def priority_analysis(Density_list, App_priority_list):
 
     for density in Density_list:
         print('当前计算的网络拓扑规模为{} \n'.format(density))
-        sub_path = '\\Different_network_scale\\Topology_{}[Band=10]+App_50[demand=2]\\'.format(density) # 读取对应的网络和业务excel数据存储的文件夹
+        sub_path = 'Different_network_scale\\Topology_{}[Band=10]+App_50[demand=2]\\'.format(density) # 读取对应的网络和业务excel数据存储的文件夹
         topology_file = sub_path + 'Topology_{}_Band=10'.format(density)
         coordinates_file = sub_path + 'Node_Coordinates_{}_Uniform'.format(density)
         app_file = sub_path + 'App_50_Demand=2_inTopo={}'.format(density)
@@ -110,7 +110,7 @@ def priority_analysis(Density_list, App_priority_list):
         availability_different_priority_local.loc[:, density] = pd.Series(SLA_avail)  # 每一列存储该MTTF值下的业务可用度
 
     save_results(availability_different_priority_local, 'Density敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次'.format('Local', N))
-    draw_line_plot(Density_list, availability_different_priority_local, 'Density敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次'.format('Local', N))
+    # draw_line_plot(Density_list, availability_different_priority_local, 'Density敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次'.format('Local', N))
 
 
     for density in Density_list:
@@ -125,7 +125,7 @@ def priority_analysis(Density_list, App_priority_list):
         random.shuffle(app_priority)
         for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
             Apps[i].SLA = app_priority[i]
-            App[i].str = 'Global'
+            Apps[i].str = 'Global'
 
         start_time = time.time()
         sla_avail, whole_avail = Apps_Availability_MC(N, T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
@@ -137,6 +137,8 @@ def priority_analysis(Density_list, App_priority_list):
 
     save_results(availability_different_priority_local, 'Density敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次'.format('Global', N))
     draw_line_plot(Density_list, availability_different_priority_local, 'Density敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次'.format('Global', N))
+
+    return availability_different_priority_local, availability_different_priority_global
 
 
 def performance_analysis(Density_list, Beta_list):
@@ -177,7 +179,7 @@ def performance_analysis(Density_list, Beta_list):
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
 
     save_results(availability_different_beta_local, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Local', N))
-    draw_line_plot(Density_list, availability_different_beta_local, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Local', N))
+    # draw_line_plot(Density_list, availability_different_beta_local, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Local', N))
 
     for density in Density_list:
         print('当前计算的Density规模值为{} \n'.format(density))
@@ -211,6 +213,9 @@ def performance_analysis(Density_list, Beta_list):
 
 
     save_results(availability_different_beta_global, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Global', N))
+
+    draw_line_plot(Density_list, availability_different_beta_local, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Local', N))
+
     draw_line_plot(Density_list, availability_different_beta_global, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Global', N))
 
 
@@ -232,7 +237,7 @@ def draw_line_plot(x_data, y_data, file_name):
         for i in y_data.index:
             ax1.plot(x_data, y_data.loc[i], label='${}$'.format(i)) # i+1表示业务等级 c=colors[i]
     else:
-        ax1.plot(x_data, y2_data)
+        ax1.plot(x_data, y_data)
     ax1.set_xlabel('Number of nodes')
     ax1.set_ylabel('Service Availability')
     # plt.legend(title="Priority")
@@ -240,5 +245,42 @@ def draw_line_plot(x_data, y_data, file_name):
     plt.show()
 
 if __name__ == '__main__':
-    Density_list = [80, 90, 100, 110, 120, 130, 140, 150] # 一共8组网络规模的数据
 
+    ## 无线传输相关的参数
+    transmit_prob = 0.1  # 节点的传输概率
+    transmit_power = 1.5  # 发射功率(毫瓦)，统一单位：W
+    path_loss = 2  # 单位：无
+    noise = pow(10,
+                -11)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
+    bandwidth = 10 * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz
+    lambda_TH = 8 * pow(10, -1)  # 接收器的敏感性阈值,用于确定节点的传输范围
+    TX_range = 30
+    CV_range = 30  # 节点的覆盖范围
+    Topology = 'Random_SINR'
+
+    ## 1. 业务的优先级分析
+    App_priority_list = [1, 2, 3, 4, 5]
+    topology_file = 'Topology_100_Band=10[for_priority_analysis]'
+    coordinates_file = 'Node_Coordinates_100_Uniform[for_priority_analysis]'
+    app_file = 'App_50_Demand=2_inTopo=100[for_priority_analysis]'
+
+    Network_parameters = [Topology, transmit_prob]
+    Wireless_parameters = [TX_range, transmit_power, bandwidth]
+    Loss_parameters = [path_loss, noise]
+
+    ## 服务可用性评估相关的参数
+    N = 5
+    T = 876
+    message_processing_time = 0.5  # 单位为秒 s
+    path_calculating_time = 5  # 单位为秒 s
+    detection_rate = 0.99
+    demand_th = 1 * 0.2  # 根据App_demand中的均值来确定
+    beta_list = [0.5]  # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
+
+    MTTF = 2000
+    MLife = 800
+    MTTR = 4
+
+    Density_list = [ 80, 90, 100, 110, 120, 130, 140, 150] # 一共8组网络规模的数据
+
+    local_res, global_res = priority_analysis(Density_list, App_priority_list)
