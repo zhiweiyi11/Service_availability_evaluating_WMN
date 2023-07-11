@@ -121,27 +121,26 @@ def priority_analysis(MTTF_list, App_priority_list, G, Apps):
 
 def resource_analysis(MTTF_list, File_name_list):
     # 计算不同网络带宽和业务请求下的业务可用度
-    # N = 20
+    # N = 50
     # T = 8760
 
     beta_list = [0.5]
     App_priority_list = [1]
 
-    availability_different_demand_local = pd.DataFrame(index=MTTF_list) # 存储结果，每一行对应某个网络和业务需求
-    availability_different_demand_global = pd.DataFrame(index = MTTF_list)
-
-    # Coordinates_file_name = 'Node_Coordinates_100_Uniform' #
-    directory_path = '\\Different_resource_demand_Topology_100+App_30\\'
+    directory_path = 'Different_resourceAndDemand_Topology=100+App=50\\'
     Coordinates_file_name =  directory_path + 'Node_Coordinates_100_Uniform'
-    file_name_list = [['Topology_100_Band=10', 'App_30_Demand=2'], ['Topology_100_Band=10', 'App_30_Demand=5'],
-                      ['Topology_100_Band=20', 'App_30_Demand=2'],
-                      ['Topology_100_Band=20', 'App_30_Demand=5']]  # 待读取的文件列表
+    file_name_list = [['Topology_100_Band=10', 'App_50_Demand=2_inTopo=100_Band=10'], ['Topology_100_Band=10', 'App_50_Demand=5_inTopo=100_Band=10'],
+                      ['Topology_100_Band=20', 'App_50_Demand=2_inTopo=100_Band=20'],
+                      ['Topology_100_Band=20', 'App_50_Demand=5_inTopo=100_Band=20']]  # 待读取的文件列表
+
+    availability_different_demand_local = pd.DataFrame(index=MTTF_list) # 存储结果
+    availability_different_demand_global = pd.DataFrame(index=MTTF_list)
 
 
     for file_name in file_name_list:
         print('当前计算的网络和业务规模为{} \n'.format(file_name))
-        topology_file = file_name[0]
-        app_file = file_name[1]
+        topology_file = directory_path + file_name[0]
+        app_file = directory_path + file_name[1]
         G, Apps = init_function_from_file(topology_file, Coordinates_file_name, app_file,  Network_parameters, Wireless_parameters, Loss_parameters)
         for app_id in range(len(Apps)):
             Apps[app_id].SLA = 1 # 将所有业务等级设置为相同
@@ -291,15 +290,15 @@ if __name__ == '__main__':
     # MTTF = 2000
     MTTR = 4
     MLife = 800
-    MTTF_list = np.linspace(1000, 2000, 41) # 20个点
+    MTTF_list = np.linspace(1000, 2000, 41) # 40个点
 
 
     G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
 
-    local_res, global_res = priority_analysis(MTTF_list, App_priority_list, G, Apps)
+    # local_res, global_res = priority_analysis(MTTF_list, App_priority_list, G, Apps)
 
-    # File_name_list = '暂无，从函数中内置了待读取的文件列表'
-    # local_, global_ = resource_analysis(MTTF_list, File_name_list)
+    File_name_list = ['暂无，从函数中内置了待读取的文件列表']
+    local_, global_ = resource_analysis(MTTF_list, File_name_list)
 
 
     # 对计算结果进行图形化的展示

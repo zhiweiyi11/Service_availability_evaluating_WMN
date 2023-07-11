@@ -118,24 +118,25 @@ def priority_analysis(MTTR_list, App_priority_list, G, Apps):
 
 def resource_analysis(MTTR_list, File_name_list):
     # 计算不同网络带宽和业务请求下的业务可用度
-    # N = 20
+    # N = 50
     # T = 8760
 
     beta_list = [0.5]
     App_priority_list = [1]
 
-    availability_different_priority = pd.DataFrame(index=File_name_list) # 存储结果
     # Coordinates_file_name = 'Node_Coordinates_100_Uniform' #
-    directory_path = '\\Different_resource_demand_Topology_100+App_30\\'
+    directory_path = 'Different_resourceAndDemand_Topology=100+App=50\\'
     Coordinates_file_name =  directory_path + 'Node_Coordinates_100_Uniform'
-    file_name_list = [['Topology_100_Band=10', 'App_30_Demand=2'], ['Topology_100_Band=10', 'App_30_Demand=5'],
-                      ['Topology_100_Band=20', 'App_30_Demand=2'],
-                      ['Topology_100_Band=20', 'App_30_Demand=5']]  # 待读取的文件列表
+    file_name_list = [['Topology_100_Band=10', 'App_50_Demand=2_inTopo=100_Band=10'], ['Topology_100_Band=10', 'App_50_Demand=5_inTopo=100_Band=10'],
+                      ['Topology_100_Band=20', 'App_50_Demand=2_inTopo=100_Band=20'],
+                      ['Topology_100_Band=20', 'App_50_Demand=5_inTopo=100_Band=20']]  # 待读取的文件列表
 
+    availability_different_demand_local = pd.DataFrame(index=MTTR_list) # 存储结果
+    availability_different_demand_global = pd.DataFrame(index=MTTR_list)
 
     for file_name in file_name_list:
-        topology_file = file_name[0]
-        app_file = file_name[1]
+        topology_file = directory_path + file_name[0]
+        app_file = directory_path + file_name[1]
         G, Apps = init_function_from_file(topology_file, Coordinates_file_name, app_file,  Network_parameters, Wireless_parameters, Loss_parameters)
         for app_id in range(len(Apps)):
             Apps[app_id].SLA = 1 # 将所有业务等级设置为相同
@@ -144,6 +145,7 @@ def resource_analysis(MTTR_list, File_name_list):
         t1 = time.time()
         sla_avail_1, whole_avail_1 = calculate_MTTR_analysis(MTTR_list, N, G, Apps, App_priority_list, beta_list)
         save_results(whole_avail_1, 'MTTR敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
+        availability_different_demand_local.loc[:, file_name] = whole_avail_1.T
         t2 = time.time()
         print('\n 当前{}策略计算的总时长为{}h'.format(Apps[0].str, (t2 - t1) / 3600))
 
@@ -154,15 +156,17 @@ def resource_analysis(MTTR_list, File_name_list):
         t3 = time.time()
         sla_avail_2, whole_avail_2 = calculate_MTTR_analysis(MTTR_list, N, G, Apps, App_priority_list, beta_list)
         save_results(whole_avail_2, 'MTTR敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
+        availability_different_demand_global.loc[:, file_name] = whole_avail_2.T
+
         t4 = time.time()
         print('\n 当前{}策略计算的总时长为{}h'.format(Apps[0].str, (t3 - t4) / 3600))
 
-    return availability_different_priority
+    return availability_different_demand_local, availability_different_demand_global
 
 
 def performance_analysis(MTTR_list, Beta_list, G, Apps):
     # 计算不同性能比重下的服务可用度
-    # N = 20
+    # N = 50
     # T = 8760
     availability_different_beta_local = pd.DataFrame(index = Beta_list)
     availability_different_beta_global = pd.DataFrame(index = Beta_list)
@@ -285,4 +289,6 @@ if __name__ == '__main__':
 
     G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
 
-    local_res, global_res = priority_analysis(MTTR_list, App_priority_list, G, Apps)
+    # local_res, global_res = priority_analysis(MTTR_list, App_priority_list, G, Apps)
+    File_name_list = ['file_name']
+    res_local, res_global = resource_analysis(MTTR_list, File_name_list)

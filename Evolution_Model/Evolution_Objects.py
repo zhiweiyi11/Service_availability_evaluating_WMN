@@ -524,7 +524,7 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
         coord = App_coordinates[i]
         demand = App_traffic[i]
         df.loc[i] = [coord, demand]
-    saveDataFrameToExcel(df, 'GridTraffic_[request={}]'.format(App_num))
+    # saveDataFrameToExcel(df, 'GridTraffic_[request={}]'.format(App_num))
 
     for i in range(len(App_coordinates)):
         #　随机选择2个不重复的网格节点来作为业务的od对
@@ -632,22 +632,22 @@ if __name__ == '__main__':
     # 参考现有的WSN仿真器的代码，完成WSN网络的构建
     # 完成网络的代码调试
     save_data = True # 不保存节点坐标数据
-    Node_num =  140
+    Node_num =  100
     Topology = 'Random_SINR'
     Area_size = (150, 150)
     # Area_width, Area_length = 500,500# 250, 200
-    Coordinates = generate_positions(Node_num, Area_size[0], Area_size[1], save_data)
+    # Coordinates = generate_positions(Node_num, Area_size[0], Area_size[1], save_data)
     # Coordinates_sample = generate_PPP_distribution(Area_size, Node_num, save_data) # 当节点传输半径较小时，通过增加节点的数量来保证网络的连通性
-    # Coordinates_file = 'Node_Coordinates_100_Uniform'
-    # Coordinates_df = pd.read_excel( r"..\Results_Saving\{}.xlsx".format(Coordinates_file), sheet_name=0, index_col=0)
-    # Coordinates = dict(zip(Coordinates_df.index, Coordinates_df.values))
+    Coordinates_file = 'Different_resourceAndDemand_Topology=100+App=50\\Node_Coordinates_100_Uniform'
+    Coordinates_df = pd.read_excel( r"..\Results_Saving\{}.xlsx".format(Coordinates_file), sheet_name=0, index_col=0)
+    Coordinates = dict(zip(Coordinates_df.index, Coordinates_df.values))
 
     # TX_range = 50 # 传输范围为区域面积的1/5时能够保证网络全联通
     transmit_prob = 0.1 # 节点的数据发送概率
     transmit_power = 1.5  # 发射功率(毫瓦)，统一单位：W
     path_loss = 2  # 单位：无
     noise = pow(10, -11)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
-    Band = 10
+    Band = 20
     bandwidth = Band * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz 10* pow(10, 6) 改变网络的容量和带宽;
     lambda_TH = 8 * pow(1, -1)  # 接收器的敏感性阈值,用于确定节点的传输范围
     # TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss) # 传输范围为38.8
@@ -659,7 +659,14 @@ if __name__ == '__main__':
     grid_size = 5
     traffic_th = 1 # 业务网格的流量阈值
     Demand = 2
-    App_Demand = np.random.normal(loc=Demand, scale=1, size=App_num) # 生成平均值为3，标准差为1的业务带宽请求的整体分布
+    App_Demand_generation = np.random.normal(loc=Demand, scale=1, size=App_num) # 生成平均值为3，标准差为1的业务带宽请求的整体分布
+    App_Demand = [] # 确保生成的所有业务需求值为正
+    for d in App_Demand_generation:
+        if d > 0:
+            App_Demand.append(d)
+        else:
+            App_Demand.append(-d)
+
     App_Priority = [1,2,3,4,5] * int(App_num / 5) # 用于分析不同业务优先级对服务可用度的影响，假设各等级的业务数量相同
     ratio_str = 1 # 尽量分离和尽量重用的业务占比
     Strategy_P = ['Global'] * int(App_num*(1-ratio_str))
@@ -667,8 +674,8 @@ if __name__ == '__main__':
     App_Strategy = Strategy_S + Strategy_P
 
     # 确定是否从文件导入数据
-    import_topology_file = False # 不从文件中导入拓扑数据
-    file_name = 'Topology_100_SINR'
+    import_topology_file = True # 不从文件中导入拓扑数据
+    file_name = 'Different_resourceAndDemand_Topology=100+App=50\\Topology_100_Band=20'
 
     ## 这是初始随机生成网络及业务对象的代码
     G = Network(Topology, transmit_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_topology_file, file_name)
@@ -685,8 +692,8 @@ if __name__ == '__main__':
         edge_info.append(G.edges[e[0], e[1]]['fail_rate'])
         Edges_info[i] = edge_info
 
-    save_GraphInfo(Edges_info, 'Topology_{}_Band={}'.format(Node_num, Band) )
-    save_AppInfo(Apps, 'App_{}_Demand={}_inTopo={}'.format(App_num, Demand, Node_num))
+    # save_GraphInfo(Edges_info, 'Topology_{}_Band={}'.format(Node_num, Band) )
+    save_AppInfo(Apps, 'App_{}_Demand={}_inTopo={}_Band={}'.format(App_num, Demand, Node_num, Band))
     # # # Apps_load = load_AppInfoFromExcel('App_100_SINR')
     # #
     # # # # 保存网络拓扑和业务请求的数据至Excel
