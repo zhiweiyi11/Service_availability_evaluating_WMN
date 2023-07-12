@@ -72,9 +72,9 @@ def single_availability(App_set, T, beta, demand_threshold):
         Apps_time_avail[app_id] = app_time_avail #
         Apps_performance_avail[app_id] = app_performance_avail
         Single_app_avail[app_id] = beta*app_time_avail + (1-beta)*app_performance_avail
-        if Single_app_avail[app_id] < 0.9:
-            print('业务{}的性能可用度为{}'.format(app_id, app_out['degradation']))
-            print('业务{}的修复时长为{}'.format(app_id, app_out['repair']))
+        # if Single_app_avail[app_id] < 0.9:
+        #     print('业务{}的性能可用度为{}'.format(app_id, app_out['degradation']))
+        #     print('业务{}的修复时长为{}'.format(app_id, app_out['repair']))
 
 
     # 计算整网的平均服务可用度

@@ -178,7 +178,7 @@ def performance_analysis(MTTR_list, Beta_list, G, Apps):
     for mttr in MTTR_list:
         print('当前计算的MTTR值为{} \n'.format(mttr))
         start_time = time.time()
-        multi_meta_avail = pd.DataFrame(index= Beta_list)
+        multi_beta_avail = pd.DataFrame(index= Beta_list)
 
         for n in range(N):
             st_time = time.time()
@@ -186,17 +186,16 @@ def performance_analysis(MTTR_list, Beta_list, G, Apps):
             App_tmp = copy.deepcopy(Apps)
             SLA_avail, whole_avail  = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, mttr, detection_rate,
                                            message_processing_time, path_calculating_time, Beta_list, demand_th)
-            multi_meta_avail.loc[:, n + 1] = pd.Series(whole_avail)  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
+            multi_beta_avail.loc[:, n + 1] = whole_avail # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
             ed_time = time.time()
             print('\n 当前为第{}次蒙卡仿真, 仿真时长为{}s'.format(n, ed_time - st_time))
 
-        availability_different_beta_local.loc[:, mttr] = multi_meta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
+        availability_different_beta_local.loc[:, mttr] = multi_beta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
 
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
 
     save_results(availability_different_beta_local, 'MTTR敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
-    draw_line_plot(MTTR_list, availability_different_beta_local, 'MTTR敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
 
     for app_id in range(len(Apps)): # 将业务策略设置为GLobal
         Apps[app_id].str = 'Global'
@@ -204,7 +203,7 @@ def performance_analysis(MTTR_list, Beta_list, G, Apps):
     for mttr in MTTR_list:
         print('当前计算的MTTR值为{} \n'.format(mttr))
         start_time = time.time()
-        multi_meta_avail = pd.DataFrame(index= Beta_list)
+        multi_beta_avail = pd.DataFrame(index= Beta_list)
 
         for n in range(N):
             st_time = time.time()
@@ -212,16 +211,18 @@ def performance_analysis(MTTR_list, Beta_list, G, Apps):
             App_tmp = copy.deepcopy(Apps)
             SLA_avail, whole_avail  = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, mttr, detection_rate,
                                            message_processing_time, path_calculating_time, Beta_list, demand_th)
-            multi_meta_avail.loc[:, n + 1] = pd.Series(whole_avail)  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
+            multi_beta_avail.loc[:, n + 1] = whole_avail # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
             ed_time = time.time()
             print('\n 当前为第{}次蒙卡仿真, 仿真时长为{}s'.format(n, ed_time - st_time))
 
-        availability_different_beta_global.loc[:, mttr] = multi_meta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
+        availability_different_beta_global.loc[:, mttr] = multi_beta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
 
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
 
     save_results(availability_different_beta_global, 'MTTR敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
+
+    draw_line_plot(MTTR_list, availability_different_beta_local, 'MTTR敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
     draw_line_plot(MTTR_list, availability_different_beta_global, 'MTTR敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
 
     return availability_different_beta_local, availability_different_beta_global
@@ -284,7 +285,7 @@ if __name__ == '__main__':
 
     MTTF = 2000
     MLife = 800
-    MTTR_list = np.linspace(2, 10, 41) # 20个点
+    MTTR_list = np.linspace(2, 10, 41) # 40个点
 
 
     G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)

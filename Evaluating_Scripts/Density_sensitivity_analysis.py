@@ -143,8 +143,8 @@ def priority_analysis(Density_list, App_priority_list):
 
 def performance_analysis(Density_list, Beta_list):
     # 计算不同性能比重下的服务可用度
-    N = 20
-    T = 8760
+    # N = 50
+    # T = 8760
     availability_different_beta_local = pd.DataFrame(index = Beta_list)
     availability_different_beta_global = pd.DataFrame(index = Beta_list)
 
@@ -161,7 +161,7 @@ def performance_analysis(Density_list, Beta_list):
             Apps[app_id].SLA = 1
 
         start_time = time.time()
-        multi_meta_avail = pd.DataFrame(index= Beta_list)
+        multi_beta_avail = pd.DataFrame(index= Beta_list)
 
         for n in range(N):
             st_time = time.time()
@@ -169,11 +169,11 @@ def performance_analysis(Density_list, Beta_list):
             App_tmp = copy.deepcopy(Apps)
             SLA_avail, whole_avail  = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, Beta_list, demand_th)
             # print('当前第{}次循环业务的可用度为{}'.format(n, result[0][1]))
-            multi_meta_avail.loc[:, n + 1] = pd.Series(whole_avail)  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
+            multi_beta_avail.loc[:, n + 1] = whole_avail  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
             ed_time = time.time()
             print('\n 当前为第{}次蒙卡仿真, 仿真时长为{}s'.format(n, ed_time - st_time))
 
-        availability_different_beta_local.loc[:, density] = multi_meta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
+        availability_different_beta_local.loc[:, density] = multi_beta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
 
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
@@ -194,7 +194,7 @@ def performance_analysis(Density_list, Beta_list):
             Apps[app_id].str = 'Global'
 
         start_time = time.time()
-        multi_meta_avail = pd.DataFrame(index= Beta_list)
+        multi_beta_avail = pd.DataFrame(index= Beta_list)
 
         for n in range(N):
             st_time = time.time()
@@ -202,11 +202,11 @@ def performance_analysis(Density_list, Beta_list):
             App_tmp = copy.deepcopy(Apps)
             SLA_avail, whole_avail  = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, Beta_list, demand_th)
             # print('当前第{}次循环业务的可用度为{}'.format(n, result[0][1]))
-            multi_meta_avail.loc[:, n + 1] = pd.Series(whole_avail)  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
+            multi_beta_avail.loc[:, n + 1] = whole_avail  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
             ed_time = time.time()
             print('\n 当前为第{}次蒙卡仿真, 仿真时长为{}s'.format(n, ed_time - st_time))
 
-        availability_different_beta_local.loc[:, density] = multi_meta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
+        availability_different_beta_local.loc[:, density] = multi_beta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
 
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
@@ -215,7 +215,6 @@ def performance_analysis(Density_list, Beta_list):
     save_results(availability_different_beta_global, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Global', N))
 
     draw_line_plot(Density_list, availability_different_beta_local, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Local', N))
-
     draw_line_plot(Density_list, availability_different_beta_global, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Global', N))
 
 
@@ -283,4 +282,7 @@ if __name__ == '__main__':
 
     Density_list = [ 80, 90, 100, 110, 120, 130, 140, 150] # 一共8组网络规模的数据
 
-    local_res, global_res = priority_analysis(Density_list, App_priority_list)
+    # local_res, global_res = priority_analysis(Density_list, App_priority_list)
+
+    Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
+    local_res, global_res = performance_analysis(Density_list, Beta_list)

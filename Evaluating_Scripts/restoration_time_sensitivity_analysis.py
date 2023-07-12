@@ -185,8 +185,8 @@ def resource_analysis(RestorationTime_list, File_name_list):
 
 def performance_analysis(RestorationTime_list, Beta_list, G, Apps):
     # 计算不同性能比重下的服务可用度
-    N = 50
-    T = 8760
+    # N = 50
+    # T = 8760
     availability_different_beta_local = pd.DataFrame(index = Beta_list)
     availability_different_beta_global = pd.DataFrame(index = Beta_list)
 
@@ -197,7 +197,7 @@ def performance_analysis(RestorationTime_list, Beta_list, G, Apps):
     for path_calculating_time in RestorationTime_list:
         print('当前计算的RestorationTime值为{} \n'.format(path_calculating_time))
         start_time = time.time()
-        multi_meta_avail = pd.DataFrame(index= Beta_list)
+        multi_beta_avail = pd.DataFrame(index= Beta_list)
 
         for n in range(N):
             st_time = time.time()
@@ -205,17 +205,16 @@ def performance_analysis(RestorationTime_list, Beta_list, G, Apps):
             App_tmp = copy.deepcopy(Apps)
             SLA_avail, whole_avail  = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, MTTR, detection_rate,
                                            message_processing_time, path_calculating_time, Beta_list, demand_th)
-            multi_meta_avail.loc[:, n + 1] = pd.Series(whole_avail)  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
+            multi_beta_avail.loc[:, n + 1] = whole_avail # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
             ed_time = time.time()
             print('\n 当前为第{}次蒙卡仿真, 仿真时长为{}s'.format(n, ed_time - st_time))
 
-        availability_different_beta_local.loc[:, path_calculating_time] = multi_meta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
+        availability_different_beta_local.loc[:, path_calculating_time] = multi_beta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
 
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
 
     save_results(availability_different_beta_local, 'RestorationTime敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
-    draw_line_plot(RestorationTime_list, availability_different_beta_local, 'RestorationTime敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
 
     for app_id in range(len(Apps)): # 将业务策略设置为GLobal策略
         Apps[app_id].str = 'Global'
@@ -223,7 +222,7 @@ def performance_analysis(RestorationTime_list, Beta_list, G, Apps):
     for path_calculating_time in RestorationTime_list:
         print('当前计算的RestorationTime值为{} \n'.format(path_calculating_time))
         start_time = time.time()
-        multi_meta_avail = pd.DataFrame(index= Beta_list)
+        multi_beta_avail = pd.DataFrame(index= Beta_list)
 
         for n in range(N):
             st_time = time.time()
@@ -231,16 +230,18 @@ def performance_analysis(RestorationTime_list, Beta_list, G, Apps):
             App_tmp = copy.deepcopy(Apps)
             SLA_avail, whole_avail  = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, MTTR, detection_rate,
                                            message_processing_time, path_calculating_time, Beta_list, demand_th)
-            multi_meta_avail.loc[:, n + 1] = pd.Series(whole_avail)  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
+            multi_beta_avail.loc[:, n + 1] = whole_avail  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
             ed_time = time.time()
             print('\n 当前为第{}次蒙卡仿真, 仿真时长为{}s'.format(n, ed_time - st_time))
 
-        availability_different_beta_global.loc[:, path_calculating_time] = multi_meta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
+        availability_different_beta_global.loc[:, path_calculating_time] = multi_beta_avail.apply(np.mean, axis=1) # 对每行[各次蒙卡]下的整网可用度求平均值；apply function to each row.
 
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
 
     save_results(availability_different_beta_global, 'RestorationTime敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
+
+    draw_line_plot(RestorationTime_list, availability_different_beta_local, 'RestorationTime敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
     draw_line_plot(RestorationTime_list, availability_different_beta_global, 'RestorationTime敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
 
     return availability_different_beta_local, availability_different_beta_global
@@ -287,4 +288,6 @@ if __name__ == '__main__':
 
     res_local, res_global = priority_analysis(RestorationTime_list, App_priority_list, G, Apps)
 
+    Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
+    local_res, global_res = performance_analysis(RestorationTime_list, Beta_list, G, Apps)
 
