@@ -39,6 +39,11 @@ def convergence_analysis(N, T, G, Apps, App_priority_list):
 	sla_avail_df = pd.DataFrame(index=App_priority_list) # 每行为业务的id，每列存储业务可用度的方差系数
 	whole_avail_df = pd.DataFrame(index=['整网平均']) # 存储n次演化下各业务带宽损失的均值
 	""" ## 多次演化下的业务可用度结果 """
+	app_priority = App_priority_list * int(len(Apps) / len(App_priority_list))  # 乘以每类SLA等级下的业务数量
+	random.shuffle(app_priority)
+	for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
+		Apps[i].SLA = app_priority[i]
+		Apps[i].str = 'Global'
 	for n in range(10, N):
 		st2_ = time.time()
 
@@ -104,7 +109,7 @@ if __name__ == '__main__':
 	G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters,  Wireless_parameters, Loss_parameters)
 
 	# 业务可用性评估的参数
-	T = 30 * 24
+	T = 8760
 	MTTF, MLife = 2000, 800
 	MTTR = 4
 	## 重路由相关的参数
@@ -120,9 +125,12 @@ if __name__ == '__main__':
 		Apps[i].SLA = app_priority[i]
 
 	# 收敛性分析的参数
-	N = 20
+	N = 100
 
 	Con_Results = convergence_analysis(N, T, G, Apps, App_priority_list)
+	# 结果保存
+	save_results(Con_Results[0], '{}次仿真的不同优先级服务可用度方差系数'.format(N))
+	save_results(Con_Results[1], '{}次仿真的整网服务可用度的方差系数'.format(N))
 
 	# 绘制收敛性分析的结果图
 	font = {'family': 'serif',
@@ -135,28 +143,30 @@ if __name__ == '__main__':
 	fig1, ax1 = plt.subplots() # Create a figure and a set of subplots.
 	for i in range(5):
 		y = Con_Results[0].iloc[i]
-		ax1.plot(x, y, label='$s_{}$'.format(i))
+		ax1.plot(x, y, label='$s_{}$'.format(i+1))
 	# plt.title('Loss of Service Exception (LOSE)', fontdict=font)
 	plt.xlabel('simulation times ($N$)', fontdict=font)
 	plt.ylabel('Coefficient of variation', fontdict=font)
-	plt.legend(loc='upper right')
-
+	plt.legend(loc='upper right',title='priority')
+	plt.ylim(top=0.01)
 	# Tweak spacing to prevent clipping of ylabel 调整间距以防止剪裁ylabel
 	plt.subplots_adjust(left=0.15)
+	plt.savefig(r'..\Pictures_Saved\收敛性分析图{}.jpg'.format('{}'.format('不同SLA的服务A方差系数'), dpi=1200))
+
 	plt.show()
 
 	## 服务带宽损失
 
 	fig, ax = plt.subplots() # Create a figure and a set of subplots.
-	for i in range(5):
-		y = Con_Results[1].iloc[i]
-		ax.plot(x, y, label='$s_{}$'.format(i))
+	y = Con_Results[1].loc['整网平均']
+	ax.plot(x, y, label='$s_{}$'.format(i))
 	# plt.title('Loss of Service Exception (LOSE)', fontdict=font)
 	plt.xlabel('simulation times ($N$)', fontdict=font)
-	plt.ylabel('Loss of service exception (Mbps/hr)', fontdict=font)
-	plt.legend()
+	plt.ylabel('coefficient of variation', fontdict=font)
+	plt.subplots_adjust(left=0.15)
+	plt.ylim(top=0.01)
+	plt.legend(title='whole network')
+	plt.savefig(r'..\Pictures_Saved\收敛性分析图{}.jpg'.format('{}'.format('整网服务A方差系数'), dpi=1200))
 	plt.show()
 
-	# 结果保存
-	save_results(Con_Results[0], '{}次仿真的服务可用度方差系数'.format(N))
-	# save_results(Con_Results[1], '{}次仿真的服务带宽损失均值'.format(N))
+

@@ -290,6 +290,13 @@ if __name__ == '__main__':
 
     G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
 
-    # local_res, global_res = priority_analysis(MTTR_list, App_priority_list, G, Apps)
+    local_res, global_res = priority_analysis(MTTR_list, App_priority_list, G, Apps)
+    print('优先级敏感性分析已完成\n')
+
+    Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
+    local_res_beta, global_res_beta = performance_analysis(MTTR_list, Beta_list, G, Apps)
+    print('性能权重敏感性分析已完成\n')
+
+
     File_name_list = ['file_name']
     res_local, res_global = resource_analysis(MTTR_list, File_name_list)

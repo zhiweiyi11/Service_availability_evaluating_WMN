@@ -16,7 +16,6 @@ from itertools import islice # 创建一个迭代器，返回从 iterable 里选
 from Evolution_Model.Evolution_Objects import *
 from Evolution_Model.Evolution_Conditions import cond_func
 from Evolution_Model.Application_request_generating import *
-
 def k_shortest_paths(k, G, source, target,  weight, strategy, original_path_length):
     # use this function to efficiently compute the k shortest/best paths between two nodes
     candidate_paths = []
@@ -117,6 +116,7 @@ def app_fault_detect(detection_successful_probability, failed_service_list):
 
     return successful_app_list, unsuccessful_app_list
 
+
 # 路由规则
 def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, node_fail_list, recovery_parameters):
     '''
@@ -128,7 +128,7 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
     :parm strategy: 重路由策略（尽量重用 or 尽量分离）
     :return: 业务的新路径
     '''
-    K = 10 # 表示K最短路径的数量
+    K = 5 # 表示K最短路径的数量
     G_sample = copy.deepcopy(G)
     # 根据recovery model计算重路由时长的参数
     message_processing_time, path_calculating_time, rerouting_app_num = recovery_parameters[0], recovery_parameters[1], recovery_parameters[2]
@@ -214,6 +214,7 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
                         available_access_list.append(n)
                 if available_access_list: # 如果存在可接入的节点list
                     source = random.choice(available_access_list)
+                    # destination = app_path[-1]
                     destination = app_path[fail_node_index+1]
                 else: # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
                     return new_app_path, reroute_duration
@@ -232,14 +233,13 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
                         available_exit_list.append(n)
                 if available_exit_list:  # 如果存在可接入的节点list
                     destination = random.choice(available_exit_list)
+                    # source = app_path[0]
                     source = app_path[fail_node_index-1] # local策略下重路由时，若宿节点故障，发起重路由的源节点仍然不变
 
                 else:  # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
                     return new_app_path, reroute_duration
             else: # 如果业务的接出节点仅有1个
                 return new_app_path, reroute_duration
-
-
         else: # 如果业务的故障模式为中继节点
             source = app_path[fail_node_index - 1]
             destination = app_path[fail_node_index + 1]
@@ -256,17 +256,23 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
 
         original_path_length = len(app_path)
         new_subpath_optional = k_shortest_paths(K, G_sample, source, destination,  'weight', app_strategy, original_path_length)
+
         # print('重路由计算得到的候选路径集为{}'.format(new_subpath_optional))
         new_subpath = find_available_path(G_sample, app_demand, new_subpath_optional, node_fail_list[0]) # 这只能找到子路径上的路径带宽是否满足
         # print('最终选择的新路径为{} '.format(new_subpath))
         if new_subpath: # 如果路径存在
-            if fail_node_index == 0 or fail_node_index == len(app_path)-1: # 如果故障节点为首/尾节点,则不对计算得到的新路径进行切片
+            # if fail_node_index == 0 : # 如果故障节点为首/尾节点,则不对计算得到的新路径进行切片
+            #     new_app_path = new_subpath[:-1] + app_path[fail_node_index+1:]
+            # elif fail_node_index == len(app_path)-1:
+            #     new_app_path = app_path[:fail_node_index-1] + new_subpath
+            if fail_node_index ==0 or fail_node_index == len(app_path)-1:
                 new_app_path = new_subpath
             else:
                 new_app_path = app_path[:fail_node_index-1] + new_subpath[:-1] + app_path[fail_node_index+1:] # 对子路径进行切片组合为新的业务路径
             reroute_duration = (rerouting_app_num + 2 * len(new_subpath)) * message_processing_time + rerouting_app_num * path_calculating_time
+            # print('成功重路由恢复,源路径为{},新路径为{} '.format(app_path, new_app_path))
         else:
-            print('业务原路径{}重路由计算不成功，可选的路径集合为{}'.format(original_path_length, new_subpath_optional))
+            print('业务重路由计算不成功，原路径长度为{}，可选的路径集合为{}'.format(original_path_length, new_subpath_optional))
 
         # # 用来检测Local策略下重路由计算出来的路径是否有回环
         # s1 = set(new_app_path)
