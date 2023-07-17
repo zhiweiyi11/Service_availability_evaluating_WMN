@@ -100,22 +100,22 @@ def priority_analysis(MTTF_list, App_priority_list, G, Apps):
     save_results(availability_different_priority_local, 'MTTF敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
     draw_line_plot(MTTF_list, availability_different_priority_local, 'MTTF敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
 
-    for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
-        Apps[i].str = 'Global'  # 将业务的策略设置为Global
+    # for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
+    #     Apps[i].str = 'Global'  # 将业务的策略设置为Global
 
-    for mttf in MTTF_list:
-
-        print('当前计算的MTTF值为{} \n'.format(mttf))
-        start_time = time.time()
-        SLA_avail, whole_avail = Apps_Availability_MC(N, T,  G, Apps, mttf, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
-        end_time = time.time()
-        print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
-
-        SLA_avail = calculate_SLA_results(Apps, SLA_avail, App_priority_list)
-        availability_different_priority_global.loc[:, mttf] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
-
-    save_results(availability_different_priority_global, 'MTTF敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
-    draw_line_plot(MTTF_list, availability_different_priority_global, 'MTTF敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
+    # for mttf in MTTF_list:
+    #
+    #     print('当前计算的MTTF值为{} \n'.format(mttf))
+    #     start_time = time.time()
+    #     SLA_avail, whole_avail = Apps_Availability_MC(N, T,  G, Apps, mttf, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
+    #     end_time = time.time()
+    #     print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
+    #
+    #     SLA_avail = calculate_SLA_results(Apps, SLA_avail, App_priority_list)
+    #     availability_different_priority_global.loc[:, mttf] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
+    #
+    # save_results(availability_different_priority_global, 'MTTF敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)))
+    # draw_line_plot(MTTF_list, availability_different_priority_global, 'MTTF敏感性分析-不同优先级的服务可用度-{}策略,演化N={}次,{}节点的拓扑'.format(Apps[0].str, N, len(G)) )
 
     return availability_different_priority_local, availability_different_priority_global
 
@@ -188,6 +188,7 @@ def performance_analysis(MTTF_list, Beta_list, G, Apps):
             st_time = time.time()
             G_tmp = copy.deepcopy(G)
             App_tmp = copy.deepcopy(Apps)
+            print('业务5的初始路径为{}'.format(App_tmp[5].path))
             SLA_avail, whole_avail  = calculateAvailability(T, G_tmp, App_tmp, mttf, MLife, MTTR, detection_rate,
                                            message_processing_time, path_calculating_time, Beta_list, demand_th)
             multi_beta_avail.loc[:, n + 1] = whole_avail  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
@@ -271,7 +272,7 @@ if __name__ == '__main__':
     App_priority_list = [1, 2, 3, 4, 5]
     topology_file = 'Topology_100_Band=10[for_priority_analysis]'
     coordinates_file =  'Node_Coordinates_100_Uniform[for_priority_analysis]'
-    app_file = 'App_50_Demand=2_inTopo=100[for_priority_analysis]'
+    app_file = 'App_50_Demand=2_inTopo=100[for_priority_analysis]' # 'App_50_Demand=2_inTopo=100_Band=10' #
 
     Network_parameters = [Topology, transmit_prob]
     Wireless_parameters = [TX_range, transmit_power, bandwidth]
@@ -285,7 +286,7 @@ if __name__ == '__main__':
     message_processing_time = 0.05 # 单位为秒 50ms
     path_calculating_time = 5 # 单位为秒 s
     detection_rate = 0.99
-    demand_th = 1*0.2 # 根据App_demand中的均值来确定
+    demand_th = 0.2 # 根据App_demand中的均值来确定
     beta_list = [0.5] # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
 
     # MTTF = 2000
@@ -297,11 +298,11 @@ if __name__ == '__main__':
     G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
 
     Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
-    local_res, global_res = performance_analysis(MTTF_list, Beta_list, G, Apps)
+    # local_res, global_res = performance_analysis(MTTF_list, Beta_list, G, Apps)
 
-    # local_res, global_res = priority_analysis(MTTF_list, App_priority_list, G, Apps)
+    local_res, global_res = priority_analysis(MTTF_list, App_priority_list, G, Apps)
 
-    File_name_list = ['暂无，从函数中内置了待读取的文件列表']
+    # File_name_list = ['暂无，从函数中内置了待读取的文件列表']
     # local_, global_ = resource_analysis(MTTF_list, File_name_list)
 
 

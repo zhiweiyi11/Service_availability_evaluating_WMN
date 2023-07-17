@@ -293,7 +293,7 @@ if __name__ == '__main__':
     message_processing_time = 0.05 # 单位为秒s [毫秒量级]
     path_calculating_time = 5 # 单位为秒 s [秒量级]
     detection_rate = 0.99
-    demand_th = 1*0.2 # 根据App_demand中的均值来确定
+    demand_th = 0.2 # 根据App_demand中的均值来确定
     beta_list = [0.5] # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
     App_priority_list = [1,2,3,4,5]
     app_priority = App_priority_list * int(len(Apps) / len(App_priority_list))
