@@ -15,22 +15,88 @@ import re
 import matplotlib.pyplot as plt
 import seaborn as sns
 import datetime
+import matplotlib as mpl
+from matplotlib.collections import PatchCollection
+from matplotlib.pyplot import MultipleLocator, FormatStrFormatter
 
-def draw_MTBF_plot(x_data, y_data, filename):
+def read_data_from_excel(folder_name, file_name):
+    # 根据文件夹的名称和文件的名称，读取服务可用性的结果
+    availability_data = pd.read_excel(r"..\Drawing_Scripts\Data_saved\{}\{}.xlsx".format(folder_name, file_name))
+    x_data = availability_data.columns.to_list()
+    # y_data = availability_data.to_dict() # 将每一列的数据存储为一个字典
+    y_data = {}
+    for index in availability_data.index.to_list():
+        y_data[index] = availability_data.loc[index,:].to_list()
+
+
+    return x_data, y_data
+
+
+def draw_priority_plot(x_data, y_data, analysis_param, filename):
+    font = {'family': 'serif',
+            'color': 'black',
+            'weight': 'normal',
+            'size': 14,  } # 字体设置
+
     # 绘制带标签的折线图
     time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M') # 记录数据存储的时间
     fig, ax = plt.subplots()
     fig.subplots_adjust(hspace=0.5) # make a little extra space between the subplots
     colors = ['gold','blue','green','orangered','hotpink']
     for i in range(len(y_data)):
-        ax.plot(x_data, y_data[i+1],c=colors[i], label='${}$'.format(i+1)) # i+1表示业务等级
+        ax.plot(x_data, y_data[i],c=colors[i],alpha = 0.5,marker='o', label='${}$'.format(i+1)) # i+1表示业务等级
 
     # ax.set_xlim(x_data[0]-3, x_data[-1]+3)
-    ax.set_xlabel('Simulation times of RNEM')
-    ax.set_ylabel('Coefficient of Variation')
+    ax.set_xlabel('${}$ of network nodes'.format(analysis_param), fontdict=font)
+    ax.set_ylabel('Service availability', fontdict=font)
+
+    y_Locator = MultipleLocator(0.0002) # 设置y轴刻度标签为 0.0001 的倍数
+    y_Formatter = FormatStrFormatter('%1.4f') #设置y轴标签文本的格式
+    ax.yaxis.set_major_locator(y_Locator)
+    ax.yaxis.set_major_formatter(y_Formatter)
+    plt.ylim(top=1)
+
     plt.legend(loc="upper right", title="Priority")
-    plt.savefig(r'.\Pictures_saved\line_plot_{}time={}.jpg'.format(filename, time2), dpi=1200)
+    plt.subplots_adjust(left=0.15)
+
+    # plt.savefig(r'.\Pictures_saved\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
     plt.show()
+
+def draw_performance_plot(x_data, y_data, analysis_param, fileneme):
+    # 绘制性能权重分析的折线图
+    font = {'family': 'serif',
+            'color': 'black',
+            'weight': 'normal',
+            'size': 14, }  # 字体设置
+    Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
+
+    # 绘制带标签的折线图
+    time = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')  # 记录数据存储的时间
+    fig, ax = plt.subplots()
+    fig.subplots_adjust(hspace=0.5)  # make a little extra space between the subplots
+    colors = ['gold', 'blue', 'green', 'orangered', 'hotpink']
+    for i in range(len(y_data)):
+        ax.plot(x_data, y_data[i], c=colors[i], alpha=0.5, marker='o', label='$beta$={}'.format(Beta_list[i]))
+
+    ax.set_xlabel('${}$ of network nodes'.format(analysis_param), fontdict=font)
+    ax.set_ylabel('Service availability', fontdict=font)
+
+    y_Locator = MultipleLocator(0.0002) # 设置y轴刻度标签为 0.0001 的倍数
+    y_Formatter = FormatStrFormatter('%1.4f') #设置y轴标签文本的格式
+    ax.yaxis.set_major_locator(y_Locator)
+    ax.yaxis.set_major_formatter(y_Formatter)
+    plt.ylim(top=1)
+
+    plt.legend(loc="upper right", title="Priority")
+    plt.subplots_adjust(left=0.15)
+
+    # plt.savefig(r'.\Pictures_saved\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
+    plt.show()
+
+def draw_resource_plot(x_data, y_data, analysis_param, filename):
+    # 绘制资源需求分析的折线图
+    pass
+
 
 def draw_box(data, filename):
     # 绘制箱线图
@@ -48,4 +114,14 @@ def draw_box(data, filename):
 
 
 if __name__ == '__main__':
-	pass
+    # 对MTTF参数的敏感性分析结果进行绘图
+    folder_name = 'Beijing713'
+    file_name = 'MTTF敏感性分析-不同优先级的服务可用度-Local策略,演化N=50次,100节点的拓扑_2023_07_10_+03_19'
+
+    x_data, y_data = read_data_from_excel(folder_name, file_name)
+    draw_priority_plot(x_data, y_data,'MTTF', 'MTTF敏感性分析, Local策略')
+
+    file_name_global = 'MTTF敏感性分析-不同优先级的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_07_11_+08_50'
+
+    x_data_global, y_data_global = read_data_from_excel(folder_name, file_name_global)
+    draw_priority_plot(x_data_global, y_data_global,'MTTF', 'MTTF敏感性分析, Global策略')

@@ -55,7 +55,7 @@ def single_availability(App_set, T, beta, demand_threshold):
 
         for k in app_out['degradation']:
             for key, value in k.items(): #这里的key为业务降级时的负载值，value为业务降级的时长
-                if key < demand_threshold:
+                if key < demand_threshold*app_demand:
                     dw_t += value
                 else:
                     perf_loss += (app_demand - key) * value *3600 # 转换为以秒s为单位
