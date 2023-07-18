@@ -35,7 +35,7 @@ def single_availability(App_set, T, beta, demand_threshold):
     # 计算单次网络演化时的业务可用度(仅考虑中断时长)
     Apps_time_avail = {}  # 仅考虑中断时长的服务可用度
     Apps_performance_avail = {} # 考虑业务实际负载的可用度
-    Single_app_avail = {}
+    Single_app_avail = {} # 统计每个业务的可用度
     Whole_network_avail = 0
     Totoal_traffic_flow = 0
 
@@ -166,15 +166,15 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, me
 
         G_tmp.restore_link_state() # 将链路的权重还原为其非中断率【这里还需要修改】
 
-    OneTime_SLA_availability, OneTime_whole_availability = [], []
+    OneTime_each_availability, OneTime_whole_availability = [], []
     for beta in beta_list:
         onetime_availability = single_availability(App_tmp, T, beta, demand_th) # 单次演化的业务可用度结果
-        OneTime_SLA_availability.append(onetime_availability[0])
+        OneTime_each_availability.append(onetime_availability[0])
         OneTime_whole_availability.append(onetime_availability[1])
     # print('当前演化下业务可用度计算完成 \n')
     # time.sleep(2)
     # print(threading.current_thread().name + '执行操作的业务可用度结果是={} \n'.format(onetime_availability[0][1] ))
-    return OneTime_SLA_availability, OneTime_whole_availability
+    return OneTime_each_availability, OneTime_whole_availability
 
 
 def Apps_Availability_Count(N, func_name, T, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time):
@@ -215,9 +215,9 @@ def Apps_Availability_MC(N,T, G, Apps,  MTTF, MLife, MTTR, detection_rate, messa
         st_time = time.time()
         G_tmp = copy.deepcopy(G)
         App_tmp = copy.deepcopy(Apps)
-        SLA_avail, whole_avail = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
+        single_avail, whole_avail = calculateAvailability(T, G_tmp, App_tmp, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
         # print('当前第{}次循环业务的可用度为{}'.format(n, result[0][1]))
-        multi_single_avail.loc[:, n + 1] = pd.Series(SLA_avail[0])  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
+        multi_single_avail.loc[:, n + 1] = pd.Series(single_avail[0])  # 将单次演化下各业务的可用度结果存储为dataframe中的某一列(index为app_id)，其中n+1表示列的索引
         multi_whole_avail.loc[:, n + 1] = whole_avail[0]
         ed_time = time.time()
         print('\n 当前为第{}次蒙卡仿真, 仿真时长为{}s'.format(n, ed_time-st_time))

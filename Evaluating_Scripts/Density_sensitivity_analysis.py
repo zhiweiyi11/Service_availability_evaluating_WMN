@@ -52,8 +52,9 @@ def calculate_SLA_results(Apps, multi_app_res, app_priority_list):
 def calculate_Density_results(Density_list, N, App_priority_list, beta_list):
     # 服务可用度的网络节点密度敏感性分析[业务仅1个优先级]
     MLife = 800
-    single_avail = pd.DataFrame(index=App_priority_list)
-    whole_avail = pd.DataFrame(index=['{}次演化'.format(N)])
+    SLA_avail = pd.DataFrame(index = App_priority_list)
+    WHOLE_avail = pd.DataFrame(index=['一共{}次演化平均'.format(N)])
+    EACH_avail = pd.DataFrame(index=list(range(50))) # 假设一共有50个业务
     # path = '\\Different_network_scale\\'
 
     for density in Density_list:
@@ -65,17 +66,17 @@ def calculate_Density_results(Density_list, N, App_priority_list, beta_list):
         G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
 
         start_time = time.time()
-        sla_avail, whole_avail = Apps_Availability_MC(N, T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
+        current_each_avail, current_whole_avail = Apps_Availability_MC(N, T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time - start_time))
 
-        SLA_avail = calculate_SLA_results(Apps, sla_avail, App_priority_list)
-        whole_ave = np.mean(whole_avail.iloc[0].tolist())
-        single_avail.loc[:, density] = pd.Series(SLA_avail)  # 每一列存储该MTTF值下的业务可用度
-        whole_avail.loc[:, density] = whole_ave
+        current_SLA_avail = calculate_SLA_results(Apps, current_each_avail, App_priority_list)
+        current_whole_ave = np.mean(current_whole_avail.iloc[0].tolist())
+        SLA_avail.loc[:, density] = pd.Series(current_SLA_avail)  # 每一列存储该MTTF值下的业务可用度
+        WHOLE_avail.loc[:, density] = current_whole_ave
+        EACH_avail.loc[:, density] = current_each_avail.apply(np.mean, axis=1) # 对每一行求平均值
 
-
-    return single_avail, whole_avail
+    return SLA_avail, WHOLE_avail
 
 def priority_analysis(Density_list, App_priority_list):
     # 计算不同优先级下的业务可用度

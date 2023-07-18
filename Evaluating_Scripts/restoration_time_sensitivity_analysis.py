@@ -72,22 +72,25 @@ def draw_line_plot(x_data, y_data, file_name):
 def calculate_RestorationTime_analysis(RestorationTime_list, N, G, Apps, App_priority_list, beta_list):
     # 服务可用度的MTTR敏感性分析
     MLife = 800
-    single_avail = pd.DataFrame(index = App_priority_list)
-    whole_avail = pd.DataFrame(index=['{}次演化'.format(N)])
+    SLA_avail = pd.DataFrame(index = App_priority_list)
+    WHOLE_avail = pd.DataFrame(index=['一共{}次演化平均'.format(N)])
+    EACH_avail = pd.DataFrame(index=list(Apps.keys()))
 
     for path_calculating_time in RestorationTime_list:
         print('当前计算的RestorationTime值为{} \n'.format(path_calculating_time))
         start_time = time.time()
-        sla_avail, whole_avail = Apps_Availability_MC(N, T,  G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time,   path_calculating_time, beta_list, demand_th)
+        current_each_avail, current_whole_avail = Apps_Availability_MC(N, T,  G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time,   path_calculating_time, beta_list, demand_th)
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
 
-        SLA_avail = calculate_SLA_results(Apps, sla_avail, App_priority_list)
-        whole_ave = np.mean(whole_avail.iloc[0].tolist())
-        single_avail.loc[:, path_calculating_time] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
-        whole_avail.loc[:, path_calculating_time] = whole_ave
+        current_SLA_avail = calculate_SLA_results(Apps, current_each_avail, App_priority_list)
+        current_whole_ave = np.mean(current_whole_avail.iloc[0].tolist())
+        SLA_avail.loc[:, path_calculating_time] = pd.Series(current_SLA_avail) # 每一列存储该MTTF值下的业务可用度
+        WHOLE_avail.loc[:, path_calculating_time] = current_whole_ave
+        EACH_avail.loc[:, path_calculating_time ] = current_each_avail.apply(np.mean, axis=1) # 对每一行求平均值
 
-    return single_avail, whole_avail
+
+    return SLA_avail, WHOLE_avail
 
 def priority_analysis(RestorationTime_list, App_priority_list, G, Apps):
     # 计算不同优先级下的业务可用度
@@ -164,7 +167,7 @@ def resource_analysis(RestorationTime_list, File_name_list):
         t1 = time.time()
         sla_avail_1, whole_avail_1 = calculate_RestorationTime_analysis(RestorationTime_list, N, G, Apps, App_priority_list, beta_list)
         save_results(whole_avail_1, 'RestorationTime敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
-        availability_different_demand_local.loc[:, file_name] = whole_avail_1.T
+        # availability_different_demand_local.loc[:, file_name] = whole_avail_1.T
 
         t2 = time.time()
         print('\n 当前{}策略计算的总时长为{}h'.format(Apps[0].str, (t2 - t1) / 3600))
@@ -176,7 +179,7 @@ def resource_analysis(RestorationTime_list, File_name_list):
         t3 = time.time()
         sla_avail_2, whole_avail_2 = calculate_RestorationTime_analysis(RestorationTime_list, N, G, Apps, App_priority_list, beta_list)
         save_results(whole_avail_2, 'RestorationTime敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
-        availability_different_demand_global.loc[:, file_name] = whole_avail_2.T
+        # availability_different_demand_global.loc[:, file_name] = whole_avail_2.T
 
         t4 = time.time()
         print('\n 当前{}策略计算的总时长为{}h'.format(Apps[0].str, (t3 - t4) / 3600))
