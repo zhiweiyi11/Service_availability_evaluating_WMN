@@ -65,9 +65,9 @@ def calculate_RecoveryRate_analysis(RecoveryRate_list, N, G, Apps, App_priority_
         end_time = time.time()
         print('采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, end_time-start_time))
 
-        SLA_avail = calculate_SLA_results(Apps, current_each_avail, App_priority_list)
+        current_SLA_avail = calculate_SLA_results(Apps, current_each_avail, App_priority_list)
         current_whole_ave = np.mean(current_whole_avail.iloc[0].tolist())
-        SLA_avail.loc[:, detection_rate] = pd.Series(SLA_avail) # 每一列存储该MTTF值下的业务可用度
+        SLA_avail.loc[:, detection_rate] = pd.Series(current_SLA_avail) # 每一列存储该MTTF值下的业务可用度
         WHOLE_avail.loc[:, detection_rate] = current_whole_ave
         EACH_avail.loc[:, detection_rate ] = current_each_avail.apply(np.mean, axis=1) # 对每一行求平均值
 
