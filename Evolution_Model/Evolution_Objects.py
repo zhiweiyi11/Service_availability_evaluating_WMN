@@ -586,9 +586,12 @@ def load_AppInfoFromExcel(fileName: str) -> dict:
         id = df.loc[i]['id']
 
         access = df.loc[i]['access']
+        access = str(access) + ' '
         access = access.split() # 将access字符串转换为单个字符组成的列表
         access_list = list(map(int, access)) # 将读入的字符串列表转换为int格式的列表
+
         exit = df.loc[i]['exit']
+        exit = str(exit) + ' '
         exit = exit.split()
         exit_list = list(map(int, exit))
 
