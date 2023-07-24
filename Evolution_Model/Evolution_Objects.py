@@ -449,14 +449,15 @@ def generate_app_path(G, source, destination, app_demand):
     bottleneck_link = []
     app_path = []
     # print('重路由计算得到的候选路径集为{}'.format(new_subpath_optional))
-    while True:
+    while K > 0:
         optional_path = nx.shortest_path(G_sample, source, destination, 'weight')
 
         new_path, bottleneck_link = link_capacity_allocation(G_sample, optional_path, app_demand)
-        if new_path:
+        if new_path and len(new_path)<10: # 确保首次生成的业务路径长度小于10跳
             app_path = new_path
             break
         else:
+            K -= 1
             for link in bottleneck_link:
                 G_sample.adj[link[0]][link[1]]['weight'] = float('inf')
 
@@ -531,6 +532,7 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
         app_od_coord = random.sample(TrafficDensity[0].keys(), 2)
         # od_list = []
         while True:
+            print('计算业务的接入和接出节点\n')
             App_coordinates[i] = app_od_coord
             App_access = access_mapping(Node_Coordinates, App_coordinates, CV_range)
             access = App_access[0][i]
@@ -545,12 +547,17 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
         # demand = App_traffic[i] # 业务的流量从密度矩阵中生成
         demand = App_Demand[i] # 业务的请求的流量从外部输入
         strategy = App_Strategy[i]
+        # source, destination = od_list[0][0], od_list[0][1]
+        # tmp_od = od_list[0]
 
         while True:
             # print('业务的od列表为{} \n'.format(od_list))
+            # if od_list:
             tmp_od = random.choice(od_list)  # 从业务可接入节点集合中随机选择一个作为其源节点
             source = tmp_od[0]
             destination = tmp_od[1]
+            print('计算业务的初始部署路径 \n')
+
             # 加入约束，保证业务路径是多跳的(业务的接入和退出节点不能相同)
             # path_tmp = nx.shortest_path(G, source, destination, 'weight') # 找包含业务源宿节点图G中一条最短路径作为业务的初始路径
             # app_path= link_capacity_allocation(G, path_tmp, demand) # 根据链路的容量来确定业务是否部署在该路径上
@@ -562,12 +569,13 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
                 app.app_deploy_edge(G) # 将业务的流量映射至链路
                 App_dict[i] = app
                 break
-            elif od_list: # 如果业务的od节点可选集合不为空
+            if od_list: # 如果业务的od节点可选集合不为空
                 od_list.remove(tmp_od) # 删除掉不满足业务请求的od对
-                print('删除的业务{}的od对为{}'.format(i, tmp_od))
-            else:
-                print('第{}个业务初始路径部署失败...'.format(i))
-                break
+                print('删除的业务{}的od对为{},剩余的od对列表长度为{}'.format(i, tmp_od, len(od_list)))
+                if od_list: # 如果业务的od对列表为空则跳出循环
+                    print('第{}个业务初始路径部署失败...'.format(i))
+                    break
+
 
     return G, App_dict
 
@@ -641,7 +649,7 @@ if __name__ == '__main__':
     # Area_width, Area_length = 500,500# 250, 200
     # Coordinates = generate_positions(Node_num, Area_size[0], Area_size[1], save_data)
     # Coordinates_sample = generate_PPP_distribution(Area_size, Node_num, save_data) # 当节点传输半径较小时，通过增加节点的数量来保证网络的连通性
-    Coordinates_file = 'Different_resourceAndDemand_Topology=100+App=50\\Node_Coordinates_100_Uniform'
+    Coordinates_file =  'Node_Coordinates_100_Uniform[for_priority_analysis]' # 'Different_resourceAndDemand_Topology=100+App=50\\Node_Coordinates_100_Uniform'
     Coordinates_df = pd.read_excel( r"..\Results_Saving\{}.xlsx".format(Coordinates_file), sheet_name=0, index_col=0)
     Coordinates = dict(zip(Coordinates_df.index, Coordinates_df.values))
 
@@ -650,7 +658,7 @@ if __name__ == '__main__':
     transmit_power = 1.5  # 发射功率(毫瓦)，统一单位：W
     path_loss = 2  # 单位：无
     noise = pow(10, -11)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
-    Band = 20
+    Band = 10
     bandwidth = Band * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz 10* pow(10, 6) 改变网络的容量和带宽;
     lambda_TH = 8 * pow(1, -1)  # 接收器的敏感性阈值,用于确定节点的传输范围
     # TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss) # 传输范围为38.8
@@ -661,7 +669,7 @@ if __name__ == '__main__':
     App_num = 50
     grid_size = 5
     traffic_th = 1 # 业务网格的流量阈值
-    Demand = 2
+    Demand = 5
     App_Demand_generation = np.random.normal(loc=Demand, scale=1, size=App_num) # 生成平均值为3，标准差为1的业务带宽请求的整体分布
     App_Demand = [] # 确保生成的所有业务需求值为正
     for d in App_Demand_generation:
@@ -678,7 +686,7 @@ if __name__ == '__main__':
 
     # 确定是否从文件导入数据
     import_topology_file = True # 不从文件中导入拓扑数据
-    file_name = 'Different_resourceAndDemand_Topology=100+App=50\\Topology_100_Band=20'
+    file_name = 'Topology_100_Band=10[for_priority_analysis]' # 'Different_resourceAndDemand_Topology=100+App=50\\Topology_100_Band=20'
 
     ## 这是初始随机生成网络及业务对象的代码
     G = Network(Topology, transmit_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_topology_file, file_name)
