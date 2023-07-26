@@ -283,7 +283,7 @@ if __name__ == '__main__':
 
     Density_list = [ 80, 90, 100, 110, 120, 130, 140, 150] # 一共8组网络规模的数据
 
-    # local_res, global_res = priority_analysis(Density_list, App_priority_list)
+    local_res, global_res = priority_analysis(Density_list, App_priority_list)
 
     Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
-    local_res, global_res = performance_analysis(Density_list, Beta_list)
+    local_pf, global_pf = performance_analysis(Density_list, Beta_list)

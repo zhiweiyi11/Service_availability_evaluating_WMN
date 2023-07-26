@@ -147,7 +147,7 @@ def resource_analysis(MTTR_list, File_name_list):
 
         t1 = time.time()
         sla_avail_1, whole_avail_1 = calculate_MTTR_analysis(MTTR_list, N, G, Apps, App_priority_list, beta_list)
-        save_results(whole_avail_1, 'MTTR敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
+        save_results(whole_avail_1, 'MTTR敏感性分析,网络规模[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name[0]+file_name[1], Apps[0].str, N, len(G)))
         # availability_different_demand_local.loc[:, file_name] = whole_avail_1.T
         t2 = time.time()
         print('\n 当前{}策略计算的总时长为{}h'.format(Apps[0].str, (t2 - t1) / 3600))
@@ -158,7 +158,7 @@ def resource_analysis(MTTR_list, File_name_list):
 
         t3 = time.time()
         sla_avail_2, whole_avail_2 = calculate_MTTR_analysis(MTTR_list, N, G, Apps, App_priority_list, beta_list)
-        save_results(whole_avail_2, 'MTTR敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
+        save_results(whole_avail_2, 'MTTR敏感性分析,网络规模[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name[0]+file_name[1], Apps[0].str, N, len(G)))
         # availability_different_demand_global.loc[:, file_name] = whole_avail_2.T
 
         t4 = time.time()
@@ -293,13 +293,14 @@ if __name__ == '__main__':
 
     G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
 
-    # local_res, global_res = priority_analysis(MTTR_list, App_priority_list, G, Apps)
-    # print('优先级敏感性分析已完成\n')
-    #
-    # Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
-    # local_res_beta, global_res_beta = performance_analysis(MTTR_list, Beta_list, G, Apps)
-    # print('性能权重敏感性分析已完成\n')
+    local_res, global_res = priority_analysis(MTTR_list, App_priority_list, G, Apps)
+    print('优先级敏感性分析已完成\n')
 
 
     File_name_list = ['file_name']
     res_local, res_global = resource_analysis(MTTR_list, File_name_list)
+
+    Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
+    local_res_beta, global_res_beta = performance_analysis(MTTR_list, Beta_list, G, Apps)
+    print('性能权重敏感性分析已完成\n')
+

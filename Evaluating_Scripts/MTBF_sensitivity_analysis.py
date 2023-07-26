@@ -152,7 +152,7 @@ def resource_analysis(MTTF_list, File_name_list):
 
         t1 = time.time()
         sla_avail_1, whole_avail_1 = calculate_MTTF_analysis(MTTF_list, N, G, Apps, App_priority_list, beta_list)
-        save_results(whole_avail_1, 'MTTF敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
+        save_results(whole_avail_1, 'MTTF敏感性分析,网络规模[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name[0]+file_name[1], Apps[0].str, N, len(G)))
 
         # availability_different_demand_local.loc[ :, file_name] = whole_avail_1.T # 每一列存储各文件对应的整网服务可用度
         t2 = time.time()
@@ -166,7 +166,7 @@ def resource_analysis(MTTF_list, File_name_list):
 
         t3 = time.time()
         sla_avail_2, whole_avail_2 = calculate_MTTF_analysis(MTTF_list, N, G, Apps, App_priority_list, beta_list)
-        save_results(whole_avail_2, 'MTTF敏感性分析[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name, Apps[0].str, N, len(G)))
+        save_results(whole_avail_2, 'MTTF敏感性分析,网络规模[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name[0]+file_name[1], Apps[0].str, N, len(G)))
         # availability_different_demand_global.loc[:, file_name] = whole_avail_2.T
 
         t4 = time.time()
@@ -304,13 +304,15 @@ if __name__ == '__main__':
 
     G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
 
-    Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
-    # local_res, global_res = performance_analysis(MTTF_list, Beta_list, G, Apps)
 
-    # local_res, global_res = priority_analysis(MTTF_list, App_priority_list, G, Apps)
+
+    local_res, global_res = priority_analysis(MTTF_list, App_priority_list, G, Apps)
 
     File_name_list = ['暂无，从函数中内置了待读取的文件列表']
     local_, global_ = resource_analysis(MTTF_list, File_name_list)
+
+    Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
+    local_pf, global_pf = performance_analysis(MTTF_list, Beta_list, G, Apps)
 
 
     # 对计算结果进行图形化的展示
