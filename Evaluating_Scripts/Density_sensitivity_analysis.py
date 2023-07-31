@@ -215,8 +215,8 @@ def performance_analysis(Density_list, Beta_list):
 
     save_results(availability_different_beta_global, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Global', N))
 
-    draw_line_plot(Density_list, availability_different_beta_local, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Local', N))
-    draw_line_plot(Density_list, availability_different_beta_global, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Global', N))
+    # draw_line_plot(Density_list, availability_different_beta_local, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Local', N))
+    # draw_line_plot(Density_list, availability_different_beta_global, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Global', N))
 
 
     return availability_different_beta_local, availability_different_beta_global

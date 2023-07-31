@@ -7,6 +7,7 @@
 @Date   ：2023/7/3 22:10
 @Desc   ：恢复时间的敏感性分析
 =================================================='''
+import re
 
 import numpy as np
 import networkx as nx
@@ -166,7 +167,7 @@ def resource_analysis(RestorationTime_list, File_name_list):
 
         t1 = time.time()
         sla_avail_1, whole_avail_1 = calculate_RestorationTime_analysis(RestorationTime_list, N, G, Apps, App_priority_list, beta_list)
-        save_results(whole_avail_1, 'RestorationTime敏感性分析为,网络规模[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name[0]+file_name[1], Apps[0].str, N, len(G)))
+        save_results(whole_avail_1, 'RestorationTime敏感性分析-网络规模{}-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(re.findall(r'\d+',file_name[0]+file_name[1]), Apps[0].str, N, len(G)))
         # availability_different_demand_local.loc[:, file_name] = whole_avail_1.T
 
         t2 = time.time()
@@ -178,7 +179,7 @@ def resource_analysis(RestorationTime_list, File_name_list):
 
         t3 = time.time()
         sla_avail_2, whole_avail_2 = calculate_RestorationTime_analysis(RestorationTime_list, N, G, Apps, App_priority_list, beta_list)
-        save_results(whole_avail_2, 'RestorationTime敏感性分析,网络规模[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name[0]+file_name[1], Apps[0].str, N, len(G)))
+        save_results(whole_avail_2, 'RestorationTime敏感性分析,网络规模{}-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(re.findall(r'\d+', file_name[0]+file_name[1]), Apps[0].str, N, len(G)))
         # availability_different_demand_global.loc[:, file_name] = whole_avail_2.T
 
         t4 = time.time()

@@ -16,6 +16,7 @@ from Evolution_Model.Evolution_Objects import *
 from Evolution_Model.Evolution_Conditions import *
 from Evolution_Model.Evolution_Rules import *
 from Evaluating_Scripts.Calculating_Availability import *
+import re
 
 def save_results(origin_df, file_name):
     # 保存仿真的数据
@@ -147,7 +148,7 @@ def resource_analysis(MTTR_list, File_name_list):
 
         t1 = time.time()
         sla_avail_1, whole_avail_1 = calculate_MTTR_analysis(MTTR_list, N, G, Apps, App_priority_list, beta_list)
-        save_results(whole_avail_1, 'MTTR敏感性分析,网络规模[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name[0]+file_name[1], Apps[0].str, N, len(G)))
+        save_results(whole_avail_1, 'MTTR敏感性分析,网络规模{}-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(re.findall(r'\d+',file_name[0]+file_name[1]), Apps[0].str, N, len(G)))
         # availability_different_demand_local.loc[:, file_name] = whole_avail_1.T
         t2 = time.time()
         print('\n 当前{}策略计算的总时长为{}h'.format(Apps[0].str, (t2 - t1) / 3600))
@@ -158,7 +159,7 @@ def resource_analysis(MTTR_list, File_name_list):
 
         t3 = time.time()
         sla_avail_2, whole_avail_2 = calculate_MTTR_analysis(MTTR_list, N, G, Apps, App_priority_list, beta_list)
-        save_results(whole_avail_2, 'MTTR敏感性分析,网络规模[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name[0]+file_name[1], Apps[0].str, N, len(G)))
+        save_results(whole_avail_2, 'MTTR敏感性分析,网络规模{}-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(re.findall(r'\d+',file_name[0]+file_name[1]), Apps[0].str, N, len(G)))
         # availability_different_demand_global.loc[:, file_name] = whole_avail_2.T
 
         t4 = time.time()
