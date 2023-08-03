@@ -326,7 +326,7 @@ class Network(nx.Graph): # 表示继承为nx.Graph的子类
     def restore_link_state(self) :
         # 在重路由计算结束后还原链路状态,即将各链路的权重还原为1
         nodes_list = list(self)
-        for n in range(len(nodes_list)):
+        for n in nodes_list:
             node_state = self.nodes[n]['alive']
             if node_state != 0: # 如果节点未故障的话
                 adj_nodes = list(self.adj[n])

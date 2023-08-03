@@ -133,7 +133,8 @@ def cond_func(G, MTTF, MLife, MTTR, T):
     MTTR_list = np.full(Num_nodes, MTTR)
 
     # T = 365 * 24  # 网络演化的时长
-    Nodes = list(range(Num_nodes))  # 网络节点集的列表
+    # Nodes = list(range(Num_nodes))  # 网络节点集的列表
+    Nodes = list(G.nodes())
     # Nodes_hash = {i: Nodes[i] for i in range(Num_nodes)}
     nodes_info = pd.DataFrame({
         "Node_id": Nodes,

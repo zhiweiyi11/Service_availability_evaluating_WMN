@@ -132,9 +132,11 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
     G_sample = copy.deepcopy(G)
     # 根据recovery model计算重路由时长的参数
     message_processing_time, path_calculating_time, rerouting_app_num = recovery_parameters[0], recovery_parameters[1], recovery_parameters[2]
+    time_propagation = 0.005
     new_app_path = [] # 业务重路由的候选路径集合
     new_app_load = 0
     reroute_duration = 0
+    degradation_duration = 0
     source = app_path[0]
     destination = app_path[-1]
 
@@ -144,11 +146,11 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
         # print('业务的重路由策略为{}'.format(app_strategy))
 
         # 1) 先将原始的路径上的链路权重设置为无穷大
-        # for i in range(len(app_path)-1):
-        #     G_sample.adj[app_path[i]][app_path[i+1]]['weight'] = float('inf')
+        for i in range(len(app_path)-1):
+            G_sample.adj[app_path[i]][app_path[i+1]]['weight'] = float('inf')
         # 2) 然后在业务的接入和接出节点集合中寻找一条满足业务带宽需求的路径
-        node = node_fail_list[0] # 取出故障节点集合中的第一个节点
-        fail_node_index = app_path.index(node)
+        faulty_node = node_fail_list[0] # 取出故障节点集合中的第一个节点
+        fail_node_index = app_path.index(faulty_node)
         # 确保从未故障的节点集合中选择路由的源宿节点
 
         ## 确定业务重路由的源宿节点
@@ -162,9 +164,9 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
                 if available_access_list:  # 如果存在可接入的节点list
                     source = random.choice(available_access_list)
                 else:  # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
-                    return new_app_path, reroute_duration
+                    return new_app_path, reroute_duration, degradation_duration
             else:
-                return new_app_path, reroute_duration
+                return new_app_path, reroute_duration, degradation_duration
 
         elif fail_node_index == len(app_path) - 1:
             if len(app_exit) > 1:
@@ -175,10 +177,10 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
                 if available_exit_list:  # 如果存在可接入的节点list
                     destination = random.choice(available_exit_list)
                 else:  # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
-                    return new_app_path, reroute_duration
+                    return new_app_path, reroute_duration, degradation_duration
 
             else:
-                return new_app_path, reroute_duration
+                return new_app_path, reroute_duration, degradation_duration
 
         else: # 如果故障的节点为业务的中继节点，则直接从其源宿节点list中随机选择一个进行重路由
             source = app_path[0]
@@ -187,12 +189,16 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
         # new_app_path = nx.shortest_path(G_sample, source, destination, 'weight')
         original_path_length = len(app_path)
         new_app_path_optional = k_shortest_paths(K, G_sample, source, destination,  'weight', app_strategy, original_path_length)
-        # print('计算得到的可选路径为{}'.format(new_app_path_optional))
-        new_app_path = find_available_path(G_sample, app_demand, new_app_path_optional, node_fail_list[0])
+        new_app_path = find_available_path(G_sample, app_path, app_demand, new_app_path_optional, faulty_node)
         if new_app_path: # 如果路径存在
-            reroute_duration = (rerouting_app_num + (fail_node_index + 1) + 2 * len(new_app_path)) * message_processing_time + rerouting_app_num * path_calculating_time
+            redirecting_node = fail_node_index # 从故障上游节点到计算恢复复路径source节点的跳数
+            merging_node = 0
+            reroute_duration, degradation_duration = service_recovery_duration(app_strategy, rerouting_app_num, redirecting_node, merging_node, len(new_app_path), path_calculating_time, message_processing_time, time_propagation)
+            # print('业务重路由成功,原路径为{},新路径为{}'.format(app_path, new_app_path))
         else:
-            print('业务重路由计算不成功, 原路径长度为{}，可选的路径集合为{}'.format(original_path_length, new_app_path_optional))
+            print('业务重路由unsuccessful,原路径为{},候选路径为{}'.format(app_path, new_app_path_optional))
+
+
 
     '''业务的Local重路由策略'''
     if app_strategy == 'Local':
@@ -202,8 +208,8 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
         for i in range(len(app_path) - 1):
             G_sample.adj[app_path[i]][app_path[i + 1]]['weight'] = float('inf')
 
-        node = node_fail_list[0]
-        fail_node_index = app_path.index(node)
+        faulty_node = node_fail_list[0]
+        fail_node_index = app_path.index(faulty_node)
         ## 确定业务重路由的源宿节点
         if fail_node_index == 0 : # 如果故障的节点是链路的首节点或尾节点
             # 根据节点的状态来重新选择业务的源节点
@@ -217,13 +223,12 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
                     # destination = app_path[-1]
                     destination = app_path[fail_node_index+1]
                 else: # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
-                    return new_app_path, reroute_duration
+                    return new_app_path, reroute_duration, degradation_duration
             else:
-                return new_app_path, reroute_duration
+                return new_app_path, reroute_duration, degradation_duration
 
         elif fail_node_index == len(app_path)-1:
-            # fail_link = (app_path[fail_node_index-1], node)
-            # link_fail_list.append(fail_link)
+
             # 重新选择业务的宿节点
             if len(app_exit) > 1:
                 available_exit_list = []
@@ -237,212 +242,203 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
                     source = app_path[fail_node_index-1] # local策略下重路由时，若宿节点故障，发起重路由的源节点仍然不变
 
                 else:  # 如果业务仅1个接入节点且发生了故障，则直接返回空的路径
-                    return new_app_path, reroute_duration
+                    return new_app_path, reroute_duration, degradation_duration
             else: # 如果业务的接出节点仅有1个
-                return new_app_path, reroute_duration
+                return new_app_path, reroute_duration, degradation_duration
         else: # 如果业务的故障模式为中继节点
             source = app_path[fail_node_index - 1]
             destination = app_path[fail_node_index + 1]
 
-        # 在计算子路径之前，将现有的可用节点的相邻链路的权重设置为无穷
-        for n in app_path:
-            if n != source and n!= destination: # G_sample.nodes[n]['alive'] == 1
-                # 将除了源宿节点外的其他节点的相邻链路都设置为inf,避免路由计算中加入这些节点(还需要加入故障节点,因为主循环中对链路设置为inf可能没有传进来)
-                adj_nodes = list(G_sample.adj[n])
-                for adj in adj_nodes:
-                    G_sample.adj[n][adj]['weight'] = float('inf')  # 将节点邻接的边的权重设置为无穷大
+        # # 在计算子路径之前，将现有的可用节点的相邻链路的权重设置为无穷
+        # for n in app_path:
+        #     if n != source and n!= destination: # G_sample.nodes[n]['alive'] == 1
+        #         # 将除了源宿节点外的其他节点的相邻链路都设置为inf,避免路由计算中加入这些节点(还需要加入故障节点,因为主循环中对链路设置为inf可能没有传进来)
+        #         adj_nodes = list(G_sample.adj[n])
+        #         for adj in adj_nodes:
+        #             G_sample.adj[n][adj]['weight'] = float('inf')  # 将节点邻接的边的权重设置为无穷大
 
-        # new_subpath = nx.shortest_path(G_sample, source, destination, 'weight')
 
         original_path_length = len(app_path)
-        new_subpath_optional = k_shortest_paths(K, G_sample, source, destination,  'weight', app_strategy, original_path_length)
+        new_app_path, reroute_duration, degradation_duration = local_path_reroute(G_sample, recovery_parameters, app_path, app_demand, faulty_node, app_access, app_exit)
+        #
+        # new_subpath_optional = k_shortest_paths(K, G_sample, source, destination,  'weight', app_strategy, original_path_length)
+        # new_subpath = find_available_path(G_sample, app_demand, new_subpath_optional, node_fail_list[0]) # 这只能找到子路径上的路径带宽是否满足
+        #
+        # if new_subpath: # 如果路径存在
+        #     redirecting_node = 0
+        #     merging_node = original_path_length - fail_node_index # 从合并原路径与恢复路径的节点到target节点的跳数
+        #     if fail_node_index == 0 or fail_node_index == len(app_path)-1:
+        #         new_app_path = new_subpath
+        #         merging_node = 0 #此时选择了新的od对来进行路由，即表示原路径与新路径没有重叠
+        #     else:
+        #         new_app_path = app_path[:fail_node_index-1] + new_subpath[:-1] + app_path[fail_node_index+1:] # 对子路径进行切片组合为新的业务路径
+        #     reroute_duration, degradation_duration = service_recovery_duration(app_strategy, rerouting_app_num, redirecting_node, merging_node, len(new_subpath), path_calculating_time, message_processing_time, time_propagation)
+        #     print('成功重路由恢复,源路径为{},新路径为{} '.format(app_path, new_app_path))
+        # else:
+        #     print('业务重路由不成功,子路径为{}'.format(new_subpath))
 
-        # print('重路由计算得到的候选路径集为{}'.format(new_subpath_optional))
-        new_subpath = find_available_path(G_sample, app_demand, new_subpath_optional, node_fail_list[0]) # 这只能找到子路径上的路径带宽是否满足
-        # print('最终选择的新路径为{} '.format(new_subpath))
-        if new_subpath: # 如果路径存在
-            # if fail_node_index == 0 : # 如果故障节点为首/尾节点,则不对计算得到的新路径进行切片
-            #     new_app_path = new_subpath[:-1] + app_path[fail_node_index+1:]
-            # elif fail_node_index == len(app_path)-1:
-            #     new_app_path = app_path[:fail_node_index-1] + new_subpath
-            if fail_node_index ==0 or fail_node_index == len(app_path)-1:
-                new_app_path = new_subpath
-            else:
-                new_app_path = app_path[:fail_node_index-1] + new_subpath[:-1] + app_path[fail_node_index+1:] # 对子路径进行切片组合为新的业务路径
-            reroute_duration = (rerouting_app_num + 2 * len(new_subpath)) * message_processing_time + rerouting_app_num * path_calculating_time
-            # print('成功重路由恢复,源路径为{},新路径为{} '.format(app_path, new_app_path))
+
+    return new_app_path, reroute_duration, degradation_duration
+
+
+def local_path_reroute(G, recovery_parameters, app_path, app_demand, faulty_node, app_access_lst, app_exit_lst):
+    # 尽量利用原有路径的恢复策略
+    Max_hop = 15
+    K = 5
+    message_processing_time, path_calculating_time, rerouting_app_num = recovery_parameters[0], recovery_parameters[1], recovery_parameters[2]
+    time_propagation = 0.005
+    # Create a list of source-destination pairs based on the service requests
+    service_request = {}  # 存储服务可能的请求od
+    available_path = []
+    new_app_path = None
+    reroute_duration = 0
+    degradation_duration = 0
+    app_strategy = 'Local'
+    Flag = False # 标志找到合适路径的标记
+
+    faulty_node_index = app_path.index(faulty_node)  # 找到故障节点在app原路径中的索引
+    # set_node_weight(G, app_path, 'faulty')
+
+    if faulty_node_index == 0:
+        service_request['source'] = [element for element in app_access_lst if element != faulty_node and element not in app_path]
+        service_request['destination'] = app_path[1:]  # 除掉首节点的剩余节点
+
+        redirecting_node = 0  # 重定向的发起节点距离为0
+        # 进行重路由计算
+        for source in service_request['source']:
+            for destination in service_request['destination']:
+                new_subpath_optional = k_shortest_paths(K, G, source, destination, 'weight', app_strategy, len(app_path) )
+
+                new_subpath = find_available_path(G, app_path, app_demand, new_subpath_optional, faulty_node)  # 这只能找到子路径上的路径带宽是否满足
+                if new_subpath:  # 如果找到了新的子路径
+                    merging_node = len(app_path) - app_path.index(new_subpath[-1])
+                    repeated_nodes = set(new_subpath)&set(app_path[app_path.index(new_subpath[-1]) + 1:])
+                    if repeated_nodes:
+                        print('存在重复节点')
+                    if (len(new_subpath) + merging_node) < Max_hop :  # 仅当新的路径满足跳数约束才算作重路由成功
+                        new_app_path = new_subpath + app_path[app_path.index(new_subpath[-1]) + 1:]
+                        reroute_duration, degradation_duration = service_recovery_duration(app_strategy, rerouting_app_num, redirecting_node, merging_node, len(new_subpath), path_calculating_time, message_processing_time, time_propagation)
+                        Flag = True
+                        break
+            if Flag:
+                break
+
+    elif faulty_node_index == len(app_path) - 1:
+        service_request['source'] = app_path[:-1] # 除掉尾节点的剩余节点
+        service_request['source'].reverse() # 将源节点list翻转
+        service_request['destination'] = [element for element in app_exit_lst if element != faulty_node and element not in app_path]
+
+        merging_node = 0 # 与原路径重叠的合并跳数为0
+        # 进行重路由计算
+        for destination in service_request['destination']:
+            # set_node_weight(G, [destination], 'alive')
+            for source in service_request['source']:  # 该策略下优先调整源节点的选择
+                # set_node_weight(G, [source], 'alive')
+                new_subpath_optional = k_shortest_paths(K, G, source, destination, 'weight', app_strategy, len(app_path))
+
+                new_subpath = find_available_path(G, app_path, app_demand, new_subpath_optional,  faulty_node)  # 这只能找到子路径上的路径带宽是否满足
+                if new_subpath:  # 如果找到了新的子路径
+                    redirecting_node = len(app_path) - app_path.index(new_subpath[0])
+                    repeated_nodes = set(new_subpath)&set(app_path[: app_path.index(new_subpath[0])]) # 找出子路径是否与原路径存在重复元素
+                    if repeated_nodes:
+                        print('存在重复节点')
+                    if (len(new_subpath) + redirecting_node) < Max_hop:  # 仅当新的路径满足跳数约束才算作重路由成功
+                        new_app_path = app_path[: app_path.index(new_subpath[0])] + new_subpath
+                        reroute_duration, degradation_duration = service_recovery_duration(app_strategy, rerouting_app_num, redirecting_node, merging_node, len(new_subpath), path_calculating_time, message_processing_time, time_propagation)
+                        Flag = True
+                        break
+            if Flag:
+                break
+
+    else:
+        service_request['source'] = app_path[:faulty_node_index]
+        service_request['source'].reverse()
+        service_request['destination'] = app_path[faulty_node_index + 1:]
+        # 进行重路由计算
+        for source in service_request['source']:
+            # set_node_weight(G, [source], 'alive')
+            for destination in service_request['destination']:
+                # set_node_weight(G, [destination], 'alive')
+                new_subpath_optional = k_shortest_paths(K, G, source, destination, 'weight', app_strategy, len(app_path))
+                new_subpath = find_available_path(G, app_path, app_demand, new_subpath_optional, faulty_node)  # 这只能找到子路径上的路径带宽是否满足
+                if new_subpath:  # 如果找到了新的子路径
+                    merging_node = len(app_path) - app_path.index(new_subpath[-1])
+                    redirecting_node = app_path.index(new_subpath[0])
+
+                    repeated_nodes = set(new_subpath)&set(app_path[:app_path.index(new_subpath[0])] + app_path[app_path.index(new_subpath[-1]) + 1:]) # 找出子路径是否与原路径存在重复元素
+                    if repeated_nodes:
+                        print('存在重复节点')
+                    if (len(new_subpath) + merging_node + redirecting_node) < Max_hop:  # 仅当新的路径满足跳数约束才算作重路由成功
+                        new_app_path = app_path[:app_path.index(new_subpath[0])] + new_subpath + app_path[app_path.index(new_subpath[-1]) + 1:]
+                        reroute_duration, degradation_duration = service_recovery_duration(app_strategy, rerouting_app_num, redirecting_node, merging_node, len(new_subpath), path_calculating_time, message_processing_time, time_propagation)
+                        Flag = True
+                        break
+            if Flag:
+                break
+
+    return new_app_path, reroute_duration, degradation_duration
+
+def set_node_weight(G, node_lst, setting_state):
+    # 将给定网络节点集合中的各节点的相邻链路权重置为对应的状态
+    for n in node_lst:
+        if setting_state == 'faulty':
+            adj_nodes = list(G.adj[n])
+            for adj in adj_nodes:
+                G.adj[n][adj]['weight'] = float('inf')  # 将节点邻接的边的权重设置为无穷大
         else:
-            print('业务重路由计算不成功，原路径长度为{}，可选的路径集合为{}'.format(original_path_length, new_subpath_optional))
+            adj_nodes = list(G.adj[n])
+            for adj in adj_nodes:
+                G.adj[n][adj]['weight'] = 1 - G.adj[n][adj]['fail_rate'] # 将节点邻接的边的权重设置为无穷大
 
-        # # 用来检测Local策略下重路由计算出来的路径是否有回环
-        # s1 = set(new_app_path)
-        # for n in s1:
-        #     if new_app_path.count(n) > 1:
-        #         print("元素{},重复{}次".format(n, new_app_path.count(n))) # 统计业务路径中出现重复的节点
-
-    return new_app_path, reroute_duration
-
-def load_allocate(G, evo_time, app_new_path, app_demand, app_original_load, app_downtime):
-    # 根据新生成的app_path_list来计算最终分配的业务负载
-    app_degradation = {} # 记录业务降级的负载以及降级的持续时间
-    bottleneck_link_list =[] # 找出所有瓶颈链路的集合
-    app_allocated_load = app_demand
-    app_degradation_time = 0 # 记录业务降级发生的时刻
-    # 根据重路由成功的业务的路径,找出所有过载的链路
-
-    for i in range(len(app_new_path)-1):
-        link_available_cap = G.adj[app_new_path[i]][app_new_path[i+1]]['capacity'] - G.adj[app_new_path[i]][app_new_path[i+1]]['load']
-        # print('链路剩余可用容量为{}'.format(link_available_cap))
-        if link_available_cap < app_demand:
-            if link_available_cap < 0.1:
-                print('当前链路的剩余可用容量为{}'.format(link_available_cap))
-                print('app_new path is {}'.format(app_new_path))
-                print('瓶颈链路为{}\n'.format([app_new_path[i],app_new_path[i+1]]))
-            bottleneck_link_list.append((app_new_path[i],app_new_path[i+1]))
-            # 若当前业务分配的负载大于链路的剩余容量，则将业务负载更新为链路剩余容量
-            if  app_allocated_load > link_available_cap :
-                app_allocated_load = link_available_cap
-    # 计算业务的降级时长
-    if app_allocated_load < app_demand: # 如果当前时刻分配的负载小于业务需求，则发生了降级
-        app_degradation_time = evo_time # 更新业务发生降级的时间
-        # 进一步判断是初次降级还是连续降级
-        if app_downtime > 0: # 判断上一时刻业务是否降级
-            degradation_load = app_original_load # 记录上一时刻的业务负载为降级的负载
-            app_degradation[degradation_load] = evo_time - app_downtime
-            # print('业务的降级时长为{}'.format(app_degradation))
-            # if evo_time - app_downtime > 100:
-            #     print('当前演化时刻为{},业务上一降级的时刻为{}'.format(evo_time, app_downtime))
-    else:
-        app_degradation_time = 0
-
-    return app_allocated_load, app_degradation, app_degradation_time
-
-def app_degradation(evo_time, app_demand, app_original_load, app_allocated_load, app_downtime):
-    app_degradation = {} # 业务降级时的负载: 降级的持续时间
-    app_degradation_time = 0 # 业务发生降级的时刻
-    if app_allocated_load < app_demand: # 如果当前时刻分配的负载小于业务需求，则发生了降级
-        app_degradation_time = evo_time # 更新业务发生降级的时间
-        # 进一步判断是初次降级还是连续降级
-        if app_downtime > 0: # 判断上一时刻业务是否降级
-            degradation_load = app_original_load
-            # if evo_time == app_downtime:
-            #     print('业务当前的降级不被记录')
-            app_degradation[degradation_load] = evo_time - app_downtime
-    else:
-        app_degradation_time = 0
-
-    return app_degradation, app_degradation_time
-
-def find_available_path(G, app_demand, path_list, fail_node):
+def find_available_path(G, app_original_path, app_demand, path_list, faulty_node):
     # First-fit策略：从K最短路集合中找出第一条满足业务带宽需求的路径
     # 如果所有候选路径均不满足业务的带宽需求，则随机选择一条路径作为available＿path
-    available_path = []
-    available_load = 0
-    # print('业务的候选路径集合为{},故障节点为{}'.format(path_list, fail_node))
-    removed_path = []
-    for path in path_list:
-        if fail_node in path: # 如果故障节点在新计算出来的路径中，则直接跳过该路径
-            removed_path.append(path)
+    available_path = None
+    app_residual_path = []
+    faulty_node_index = app_original_path.index(faulty_node)  # 找到故障节点在app原路径中的索引
+
+
+    for shortest_path in path_list:
+        # Check if the path has enough available bandwidth (first-fit strategy)
+        if faulty_node_index == 0:
+            destination = app_original_path.index(shortest_path[-1])
+            app_residual_path = app_original_path[destination + 1:]
+        elif faulty_node_index == len(app_original_path)-1:
+            source = app_original_path.index(shortest_path[0])
+            app_residual_path = app_original_path[:source]
+        else:
+            source = app_original_path.index(shortest_path[0])
+            destination = app_original_path.index(shortest_path[-1])
+            app_residual_path = app_original_path[:source] + app_original_path[destination+1:]
+        # app_available_path = [node for node in app_original_path if node != source or node != destination] # 除掉源宿节点以外的业务原路径上的节点
+        repeated_nodes = set(shortest_path) & set(app_residual_path)
+        if faulty_node in shortest_path or repeated_nodes: # 如果计算出来的路径包含原路径上的节点，则表示存在回环
             continue
         else:
-            flag = len(path)-1
-            index = 0
-            link_load_path = []
-            for i in range(len(path) - 1):
-                link_available_cap = G.adj[path[i]][path[i + 1]]['capacity'] - G.adj[path[i]][path[i + 1]]['load']
-                link_load_path.append(link_available_cap)
-                weight = G.adj[path[i]][path[i + 1]]['weight'] # 排除掉那些最短路计算出来为中断的链路
-                if link_available_cap < 0.05 or weight == float('inf'): # 如果路径剩余可用带宽小于0，则跳出循环寻找下一条路径
-                    # 这里主要的问题是 有的链路上的负载超过了容量,有的链路的权重为inf也被计算进来了
-                    # print('路径{}计算错误,链路{}的权重为{},链路的剩余可用带宽为{}'.format(path, (path[i],path[i+1]),weight, link_available_cap))
-                    removed_path.append(path) # 在路径集合中移除该错误路径,最后再对移除的path_list进行操作
-                    break # 跳出当前循环
-                else:
-                    index += 1
+            available_path_bandwidth = min(G[u][v]['capacity'] - G[u][v]['load'] for u, v in zip(shortest_path, shortest_path[1:]))
+            path_weight  = sum(G[u][v]['weight'] for u, v in zip(shortest_path, shortest_path[1:]))
 
-            if index == flag and min(link_load_path) > app_demand: # 如果索引到该path中的最后一条链路仍然有可用的带宽的话，则终止循环，输出该路径为业务的路径
-                available_path = path  # 找到可用路径后跳出循环
+            if available_path_bandwidth >= app_demand and path_weight < 100:
+                available_path = shortest_path
                 break
-                # print('计算得到的可用的路径为{}'.format( available_path ))
-    # print('待移除的业务路径为{}'.format(removed_path))
-
-    for l in removed_path:
-        path_list.remove(l)# 将计算错误的路径移除出去
-
-    if not available_path and path_list: # 如果业务的可用带宽仍然为空(即所有的子路径均不满足业务的带宽需求)
-        available_path = random.choice(path_list)
-    #     print('当前剩余可用的路径集合为{}'.format(path_list))
-    #     print('随机选择的业务路径为{}'.format(available_path))
-    #
-    # print('业务选择的路径为{}'.format(available_path))
 
     return available_path
 
 
+def service_recovery_duration(app_strategy, current_service_num, redirecting_node, merging_node, new_path_length,time_path_cal, time_process, time_propagation):
+    # 计算服务在恢复过程中的时长
+    disruption_time = 0 # 服务重路由计算的时长
+    degradation_time = 0 # 服务故障定位以及新路径响应的时长
+    strategy = app_strategy # 服务的重路由策略
 
-
-# 资源（带宽）分配规则
-def app_load_allocating(G, Apps, app_id, app_new_path):
-    # 根据业务的带宽需求和部署路径, 来确定业务在网络各链路上的负载(K is the scaling factor)
-    app_demand = Apps[app_id].demand
-    # 1. 先计算业务新的路径上链路的最小可用容量
-    link_load_path = [] # 记录业务候选路径上的链路剩余可用容量
-    bottleneck_link = []
-    App_allocated_load = {} # 记录发生负载更新的业务id及其新负载
-    app_allocated_load = app_demand # 初始分配带宽为业务需求
-
-    for i in range(len(app_new_path)-1):
-        # print('current link is {}'.format(G.edges[new_app_path[i], new_app_path[i+1]]))
-        link_available_cap = G.adj[app_new_path[i]][app_new_path[i+1]]['capacity'] - G.adj[app_new_path[i]][app_new_path[i+1]]['load']
-        link_load_path.append(link_available_cap)
-        if link_available_cap < app_allocated_load: # 如果当前链路可用容量小于业务带宽则记录为“瓶颈链路”
-            bottleneck_link.append((app_new_path[i], app_new_path[i+1]))
-            app_allocated_load = link_available_cap # 将剩余的链路容量分配给业务
-
-    capacity_available = min(link_load_path) # 计算业务路径上的最小带宽
-    # if app_allocated_load < app_demand:
-    #     print('瓶颈链路为{},分配的业务带宽为{}'.format(bottleneck_link, app_allocated_load))
-    #
-    # return app_allocated_load
-    # 2. 判断当前路径上的剩余可用容量是否满足业务的带宽需求
-    if capacity_available >=  app_demand:
-        App_allocated_load[app_id] = app_demand
+    disruption_time = current_service_num*time_path_cal + 2 * new_path_length * time_propagation
+    if strategy == 'Global':
+        degradation_time = (current_service_num + redirecting_node) * time_process + (redirecting_node+new_path_length) * time_propagation
     else:
-        # 如果剩余可用容量不足，则根据瓶颈链路上部署的业务来进行缩放
-        print('瓶颈链路为{}'.format(bottleneck_link))
+        degradation_time = current_service_num*time_process + (merging_node+new_path_length) * time_propagation
 
-        for e in bottleneck_link: # 依次遍历各瓶颈链路上的业务，对各业务的分配负载进行缩放
-            link_capacity = G.adj[e[0]][e[1]]['capacity']
-            app_list = G.adj[e[0]][e[1]]['app_dp'] + [app_id] # 链路上部署的业务集合应该加上此时待部署的业务id
-            app_original_load = [Apps[id].load for id in app_list]
-            app_pri = [Apps[id].SLA for id in app_list]  # 读取链路上部署的业务的SLA
-            total_pri = sum(app_pri)
-            while True:
-                # 计算各业务负载的缩放系数
-                app_scaling = [pri / total_pri for pri in app_pri]
-                app_scaling_factor = [(1 - k) / (1 + k) for k in app_scaling]
-                app_new_load = [x * y for x, y in zip(app_original_load, app_scaling_factor)]  # 计算调整后的各业务负载
-                if sum(app_new_load) <= link_capacity:  # 如果调整后业务的负载满足链路的容量约束, 则更新业务子路径上的负载
-                    print('当前计算得到的链路{}上的业务负载分配为{}'.format(e, app_new_load ))
-                    # G.adj[e[0]][e[1]]['load'] = sum(app_new_load)  # 更新链路的负载为缩放业务带宽后的负载(这一步骤转移至主函数的app_deploy_edge中)
-                    for i in range(len(app_list)):
-                        # 比较当前的业务负载和原有的业务负载的值的大小，如果小于，则更新App中对应子路径的业务负载值,并同时更新对应链路的负载值
-                        # if app_new_load[i] < app_original_load[i]:
-                        if app_list[i] in App_allocated_load: # 如果某一业务的多条链路上的负载进行了更新，则取最小的那个分配负载作为业务的load
-                            current_app_load = App_allocated_load[app_list[i]]
-                            if current_app_load > app_new_load[i]: # 仅当当前链路上分配给业务的load大于之前所分配的load，才对业务的最终分配load进行更新
-                                App_allocated_load[app_list[i]] = app_new_load[i]
-                                print('分配给业务{}的原负载为{}'.format( app_list[i], current_app_load))
-                                print('分配给业务{}的新负载为{}'.format(app_list[i], app_new_load[i]))
-                        else:
-                            App_allocated_load[app_list[i]] = app_new_load[i]
-                            print('重新分配负载的业务集合为{}'.format(App_allocated_load))
-                    break
-                else:
-                    app_original_load = app_new_load
+    return disruption_time, degradation_time
 
-
-    return App_allocated_load
 
 
 if __name__ == '__main__':
@@ -452,7 +448,7 @@ if __name__ == '__main__':
     Topology = 'Random'
     Area_size = (250, 150)
     Area_width, Area_length = 250, 150
-    Coordinates = generate_positions(Node_num, Area_width, Area_length)
+    Coordinates = generate_positions(Node_num, Area_width, Area_length, False)
 
     # TX_range = 50 # 传输范围为区域面积的1/5时能够保证网络全联通
     transmit_power = 15  # 发射功率(毫瓦)，统一单位：W
