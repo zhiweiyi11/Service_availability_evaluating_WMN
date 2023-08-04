@@ -33,6 +33,7 @@ from multiprocessing.pool import ThreadPool as Pool
 
 def single_availability(App_set, T, beta, demand_threshold):
     # 计算单次网络演化时的业务可用度(仅考虑中断时长)
+    # demand_threshold: 表示性能损失占业务带宽的的比例
     Apps_time_avail = {}  # 仅考虑中断时长的服务可用度
     Apps_performance_avail = {} # 考虑业务实际负载的可用度
     Single_app_avail = {} # 统计每个业务的可用度
