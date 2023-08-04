@@ -39,6 +39,7 @@ if __name__ == '__main__':
     topology_file_star = '../Results_Saving/Small_Scale_Network/topo_star'
     topology_file_P2P = '../Results_Saving/Small_Scale_Network/topo_P2P'
     topology_file_tree = '../Results_Saving/Small_Scale_Network/topo_tree'
+    topology_file_mesh = '../Results_Saving/Small_Scale_Network/topo_mesh'
 
     # coordinates_file 暂时没用到
     coordinates_file = 'Node_Coordinates_100_Uniform[for_priority_analysis]'
@@ -46,12 +47,15 @@ if __name__ == '__main__':
     app_file_star = '../Results_Saving/Small_Scale_Network/App_3_star'
     app_file_P2P = '../Results_Saving/Small_Scale_Network/App_3_P2P'
     app_file_tree = '../Results_Saving/Small_Scale_Network/App_3_tree'
+    app_file_mesh = '../Results_Saving/Small_Scale_Network/App_2_mesh'
 
-    G_star, Apps_star = init_function_from_file(topology_file_star, coordinates_file, app_file_star, Network_parameters,
-                                              Wireless_parameters, Loss_parameters)
-    G_P2P, Apps_P2P = init_function_from_file(topology_file_P2P, coordinates_file, app_file_P2P, Network_parameters,
-                                              Wireless_parameters, Loss_parameters)
-    G_tree, Apps_tree = init_function_from_file(topology_file_tree, coordinates_file, app_file_tree, Network_parameters,
+    # G_star, Apps_star = init_function_from_file(topology_file_star, coordinates_file, app_file_star, Network_parameters,
+    #                                           Wireless_parameters, Loss_parameters)
+    # G_P2P, Apps_P2P = init_function_from_file(topology_file_P2P, coordinates_file, app_file_P2P, Network_parameters,
+    #                                           Wireless_parameters, Loss_parameters)
+    # G_tree, Apps_tree = init_function_from_file(topology_file_tree, coordinates_file, app_file_tree, Network_parameters,
+    #                                           Wireless_parameters, Loss_parameters)
+    G_mesh, Apps_mesh = init_function_from_file(topology_file_mesh, coordinates_file, app_file_mesh, Network_parameters,
                                               Wireless_parameters, Loss_parameters)
 
     # 业务可用性评估的参数
@@ -59,31 +63,32 @@ if __name__ == '__main__':
     MTTF, MLife = 2000, 800
     MTTR = 4
     ## 重路由相关的参数
-    message_processing_time = 0.05  # 单位为秒s [毫秒量级]
-    path_calculating_time = 5  # 单位为秒 s [秒量级]
-    detection_rate = 0.99
-    demand_th = 1 * 0.2  # 根据App_demand中的均值来确定
+    message_processing_time = 0.05#.05  # 单位为秒s [毫秒量级]
+    path_calculating_time = 0.5 #.5  # 单位为秒 s [秒量级]
+    detection_rate = 1
+    demand_th = 0.8  # 根据App_demand中的均值来确定,表示性能损失占业务带宽需求的比例
     beta_list = [0.5]  # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
     App_priority_list = [1, 2, 3, 4, 5]
     # app_priority = App_priority_list * int(len(Apps) / len(App_priority_list))
     # random.shuffle(app_priority)
     # for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
     #     Apps[i].SLA = app_priority[i]
-
+    nx.draw_networkx(G_mesh, pos=nx.spring_layout(G_mesh))
+    plt.show()
     # 收敛性分析的参数
-    N = 100
-
+    N = 200
+    for i in range(len(Apps_mesh)):  # 将业务的优先级设置为 [1~5]
+        # Apps[i].SLA = app_priority[i]
+        Apps_mesh[i].str = 'Local'
     # single_results_star, whole_results_star = Apps_Availability_MC(N, T, G_star, Apps_star, MTTF, MLife, MTTR,
     #                                                              detection_rate,
     #                                                              message_processing_time, path_calculating_time,
     #                                                              beta_list,
     #                                                              demand_th)
 
-    single_results_P2P, whole_results_P2P = Apps_Availability_MC(N, T, G_P2P, Apps_P2P, MTTF, MLife, MTTR,
-                                                                 detection_rate,
-                                                                 message_processing_time, path_calculating_time,
-                                                                 beta_list,
-                                                                 demand_th)
+    single_results_mesh, whole_results_mesh = Apps_Availability_MC(N, T, G_mesh, Apps_mesh, MTTF, MLife, MTTR,
+                                                                 detection_rate,   message_processing_time, path_calculating_time,
+                                                                 beta_list, demand_th)
 
     # single_results_tree, whole_results_tree = Apps_Availability_MC(N, T, G_tree, Apps_tree, MTTF, MLife, MTTR,
     #                                                              detection_rate,
@@ -92,19 +97,25 @@ if __name__ == '__main__':
     #                                                              demand_th)
 
     # print(single_results_star)
-    print(single_results_P2P)
+    print(single_results_mesh)
     # print(single_results_tree)
 
-    temp1 = single_results_P2P.to_numpy()
-    availability_P2P_app_1 = temp1[0, :]
-    availability_P2P_app_2 = temp1[1, :]
-    availability_P2P_app_3 = temp1[2, :]
+    temp1 = single_results_mesh.to_numpy()
+    availability_mesh_app_1 = temp1[0, :]
+    availability_mesh_app_2 = temp1[1, :]
+
+    temp2 = whole_results_mesh.to_numpy()
+    availability_P2P_whole = temp2[0, :]
 
     # bins = np.linspace(0.9, 1, 21)
 
     fig, ax = plt.subplots()
-    n, bins, patches = ax.hist(availability_P2P_app_1, bins=10)
-    ax.plot(bins[:10], n, marker='o', color='red', linestyle='--')
+    n1, bins1, patches = ax.hist(availability_mesh_app_1, bins=20)
+    n2, bins2, patches2 = ax.hist(availability_P2P_whole, bins=20)
+
+    ax.plot(bins1[:20], n1, marker='o', color='red', linestyle='--')
+    ax.plot(bins2[:20], n2, marker='o', color='green', linestyle='--')
+
 
     # n, bins, patches = plt.hist(availability_P2P_app_1, bins=30, density=True, stacked=True)
     plt.show(block=True)

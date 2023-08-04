@@ -60,10 +60,8 @@ def single_availability(App_set, T, beta, demand_threshold):
         app_unavail = sw_t + rp_t *3600
         app_time_avail = 1 - app_unavail/(3600*T) # 在T时间间隔内的平均服务可用度
         # 服务的性能可用度=1-(总性能损失值)/总期望的性能
+        print('业务{}的修复时长为{}h,修复次数为{}次'.format(app_id, rp_t, len(app_out['repair'])))
         app_performance_avail = 1 - ((app_unavail * app_demand) + (perf_loss ))/ (3600*T*app_demand)
-        # if app_performance_avail < 0.9:
-        #     print('业务{}的性能可用度为{}'.format(app_id, app_out['degradation']))
-        #     # print('业务{}的修复时间为{}'.format(app_id, app_out['repair']))
 
         Apps_time_avail[app_id] = app_time_avail #
         Apps_performance_avail[app_id] = app_performance_avail
@@ -83,7 +81,7 @@ def single_availability(App_set, T, beta, demand_threshold):
 def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th):
     # 生成网络演化对象和演化条件，调用演化规则，来模拟网络的演化过程(Sub_service为服务部署的节点集合)
     # 1: 生成网络的演化对象
-    routing_th = 10 # 重路由的次数阈值
+    K = 10 # 重路由的次数阈值
     # G_tmp, App_tmp = copy.deepcopy(G), copy.deepcopy(App_dict)
     G_tmp , App_tmp  = G, App_dict
     Nodes = list(G)
@@ -104,14 +102,28 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, me
         # print('故障节点为{}'.format(nodes_fail))
         nodes_reco = evo_conditions.iloc[i]['repair']
         # 3.1: 首先根据修复的构件,对等待上线的业务进行恢复
-        component_repair(G_tmp, App_tmp, App_interrupt, evo_time, nodes_reco)
+        component_repair(G_tmp, App_tmp, App_interrupt, evo_time, nodes_reco) # 这里仅对修复上线的链路进行操作
+
         # if App_interrupt:
-        #     print('仍然中断的app为{}'.format(App_interrupt))
-        #     for app_id in App_interrupt:
-        #         print('仍然中断的app {} 的故障时刻为{}'.format(app_id, App_tmp[app_id].fail_time))
+        #     App_hash = {App_tmp[a].id: App_tmp[a].SLA for a in App_interrupt}
+        #     App_interrupt_sorted = sorted(App_hash)
+        #     for app_id in App_interrupt_sorted:
+        #         app = App_tmp[app_id]
+        #         source, destination = app.path[0], app.path[-1]
+        #         new_app_path = service_repair_reroute(G_tmp, source, destination, app.demand)
+        #         if new_app_path:
+        #             print('恢复计算的新路径为{}'.format(new_app_path))
+        #             app.path = new_app_path
+        #             repair_duration = evo_time - App_tmp[app_id].fail_time
+        #             app.outage['repair'].append(repair_duration)
+        #             app.fail_time = 0
+        #             app.app_deploy_node(G_tmp)
+        #             app.app_deploy_edge(G_tmp)
+        #             App_interrupt.remove(app_id)
 
         # 3.2: 然后根据故障的构件,对故障的业务进行恢复
         apps_fault = component_failure(G_tmp, App_tmp, evo_time, nodes_fail) # 读取发生故障的业务
+
 
         # action1: 对故障业务进行故障检测的action
         App_reroute, App_repair = app_fault_detect(detection_rate, apps_fault)
@@ -128,18 +140,18 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, me
         for app_id in App_reroute_sorted: # 优先级高的业务先进行重路由和带宽分配
             app = App_tmp[app_id]
             app_original_path = app.path
+            app.app_undeploy_node(G_tmp)  # 解除业务到节点的映射
+            app.app_undeploy_edge(G_tmp)  # 在路径更新前需要同时解除业务到链路上的带宽映射
+
             # print('\n app original path is {}'.format(app_original_path))
             recovery_parameters = [message_processing_time, path_calculating_time, len(App_reroute)]
             app_new_path, reroute_duration, degradation_duration = path_reroute(G_tmp,  app.demand, app.access, app.exit, app_original_path, app.str, nodes_fail, recovery_parameters)
             # print('app _new path is {}'.format(app_new_path))
             if app_new_path: # 如果业务重路由成功
-                # print('reroute successful app id is {}'.format(app_id))
                 App_successful_reroute.append(app_id) # 记录重路由成功的业务id
-                app.app_undeploy_node(G_tmp) # 解除业务到节点的映射
-                app.app_undeploy_edge(G_tmp) # 在路径更新前需要同时解除业务到链路上的带宽映射
+                # app.app_undeploy_node(G_tmp) # 解除业务到节点的映射
                 app.fail_time = 0
                 app.path = app_new_path
-                # print('业务id {}的新路径为{}'.format(app_id, app.path))
                 app.outage['reroute'].append(reroute_duration)
                 app.outage['degradation'].append(degradation_duration)
                 app.app_deploy_node(G_tmp) # 将业务新的路径部署到节点上去
@@ -147,6 +159,8 @@ def calculateAvailability(T, G, App_dict, MTTF, MLife, MTTR,  detection_rate, me
 
             else:
                 App_interrupt.append(app_id)
+                app.app_deploy_node(G_tmp)  # 如果重路由不成功，则恢复业务到节点的映射
+                app.app_deploy_edge(G_tmp)  # 在路径更新前需要同时恢复业务到链路上的带宽映射
                 App_tmp[app_id].fail_time = evo_time # 上一个双保险,确保重路由不成功的app的故障时间被记录
                 # print('重路由不成功的app为{} '.format(app_id))
         if apps_fault:
@@ -284,18 +298,20 @@ if __name__ == '__main__':
     random.shuffle(app_priority)
     for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
         Apps[i].SLA = app_priority[i]
-        Apps[i].str = 'Local'
+        Apps[i].str = 'Global'
 
     # 业务可用度评估计算
     N = 50 # 网络演化的次数
     Beta_list = [0.5]
+    st = time.time()
     app_results = calculateAvailability(T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time,  path_calculating_time, Beta_list, demand_th)
+    et = time.time()
     # st = time.time()
     # # 计算网络拓扑100个节点和200个节点下的业务可用度
     # Multi_app_results = Apps_Availability_MC(N, T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time,   path_calculating_time, beta_list, demand_th)
     # SLA_app_results = calculate_SLA_results(Apps, Multi_app_results[0], App_priority_list)
     # et = time.time()
-    # print('\n 采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, et - st))
+    print('\n 采用普通蒙卡计算{}次网络演化的时长为{}s \n'.format(N, (et - st)) )
 
 
 

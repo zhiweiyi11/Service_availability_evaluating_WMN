@@ -49,6 +49,13 @@ def component_failure(G, Apps, fail_time, failed_component_list):
         for adj in adj_nodes:
             G.adj[n][adj]['weight'] = float('inf')  # 将节点邻接的边的权重设置为无穷大
 
+    # for app_id in apps_fault:
+    #     # 解除业务到网络资源的映射
+    #     app = Apps[app_id]
+    #     app.fail_time = fail_time
+    #     app.app_undeploy_node(G)
+    #     app.app_undeploy_edge(G)
+
     apps_removed = [] # 存储一个待移除的业务id集合
     for app_id in apps_fault: #　避免将已经故障等待修复的业务加入重路由的业务集合中
         # print('节点{}故障下其上部署的业务为{}'.format(failed_component_list, apps_fault))
@@ -86,13 +93,13 @@ def component_repair(G, Apps, App_interrupt, repair_time, repaired_component_lis
                     print('业务的故障时刻为{}，修复时刻为{}'.format( Apps[app_id].fail_time, repair_time))
                 Apps[app_id].fail_time = 0  # 表示业务成功恢复上线
                 Apps[app_id].outage['repair'].append(repair_duration)
-                if Apps[app_id].down_time > 0 :# 若上一时刻业务处于降级状态(这种情况发生于故障检测不成功的业务)
-                    load = Apps[app_id].load
-                    duration = repair_time - Apps[app_id].down_time
-                    Apps[app_id].down_time = 0
-                    Apps[app_id].outage['degradation'].append({load:duration})
+                # Apps[app_id].app_deploy_edge(G) # 将业务重新部署到链路上去
+                # if Apps[app_id].down_time > 0 :# 若上一时刻业务处于降级状态(这种情况发生于故障检测不成功的业务)
+                #     load = Apps[app_id].load
+                #     duration = repair_time - Apps[app_id].down_time
+                #     Apps[app_id].down_time = 0
+                #     Apps[app_id].outage['degradation'].append({load:duration})
 
-                # print('移除的业务id为{}'.format(app_id))
                 App_interrupt.remove(app_id) # 可能是这里移除节点操作有问题(是前面component_failure函数中对一个正在遍历for循环的对象进行remove有问题)
                 # print('中断的业务集合为{}'.format(App_interrupt))
 
@@ -128,7 +135,7 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
     :parm strategy: 重路由策略（尽量重用 or 尽量分离）
     :return: 业务的新路径
     '''
-    K = 5 # 表示K最短路径的数量
+    K = 8 # 表示K最短路径的数量
     G_sample = copy.deepcopy(G)
     # 根据recovery model计算重路由时长的参数
     message_processing_time, path_calculating_time, rerouting_app_num = recovery_parameters[0], recovery_parameters[1], recovery_parameters[2]
@@ -146,8 +153,8 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
         # print('业务的重路由策略为{}'.format(app_strategy))
 
         # 1) 先将原始的路径上的链路权重设置为无穷大
-        for i in range(len(app_path)-1):
-            G_sample.adj[app_path[i]][app_path[i+1]]['weight'] = float('inf')
+        # for i in range(len(app_path)-1):
+        #     G_sample.adj[app_path[i]][app_path[i+1]]['weight'] = float('inf')
         # 2) 然后在业务的接入和接出节点集合中寻找一条满足业务带宽需求的路径
         faulty_node = node_fail_list[0] # 取出故障节点集合中的第一个节点
         fail_node_index = app_path.index(faulty_node)
@@ -195,8 +202,8 @@ def path_reroute(G, app_demand, app_access, app_exit, app_path,  app_strategy, n
             merging_node = 0
             reroute_duration, degradation_duration = service_recovery_duration(app_strategy, rerouting_app_num, redirecting_node, merging_node, len(new_app_path), path_calculating_time, message_processing_time, time_propagation)
             # print('业务重路由成功,原路径为{},新路径为{}'.format(app_path, new_app_path))
-        else:
-            print('业务重路由unsuccessful,原路径为{},候选路径为{}'.format(app_path, new_app_path_optional))
+        # else:
+        #     print('业务重路由unsuccessful,原路径为{},候选路径为{}'.format(app_path, new_app_path_optional))
 
 
 
@@ -394,7 +401,9 @@ def find_available_path(G, app_original_path, app_demand, path_list, faulty_node
     # First-fit策略：从K最短路集合中找出第一条满足业务带宽需求的路径
     # 如果所有候选路径均不满足业务的带宽需求，则随机选择一条路径作为available＿path
     available_path = None
-    app_residual_path = []
+    candi_app_path = None
+    app_residual_path = [] # 记录候选的整条新路径
+    available_residual_path_bandwidth = []
     faulty_node_index = app_original_path.index(faulty_node)  # 找到故障节点在app原路径中的索引
 
 
@@ -403,19 +412,24 @@ def find_available_path(G, app_original_path, app_demand, path_list, faulty_node
         if faulty_node_index == 0:
             destination = app_original_path.index(shortest_path[-1])
             app_residual_path = app_original_path[destination + 1:]
+            candi_app_path = shortest_path + app_original_path[destination + 1:]
+
         elif faulty_node_index == len(app_original_path)-1:
             source = app_original_path.index(shortest_path[0])
             app_residual_path = app_original_path[:source]
+            candi_app_path =  app_original_path[: source] + shortest_path
+
         else:
             source = app_original_path.index(shortest_path[0])
             destination = app_original_path.index(shortest_path[-1])
             app_residual_path = app_original_path[:source] + app_original_path[destination+1:]
+            candi_app_path = app_original_path[: source] + shortest_path + app_original_path[destination+1:]
         # app_available_path = [node for node in app_original_path if node != source or node != destination] # 除掉源宿节点以外的业务原路径上的节点
         repeated_nodes = set(shortest_path) & set(app_residual_path)
         if faulty_node in shortest_path or repeated_nodes: # 如果计算出来的路径包含原路径上的节点，则表示存在回环
             continue
         else:
-            available_path_bandwidth = min(G[u][v]['capacity'] - G[u][v]['load'] for u, v in zip(shortest_path, shortest_path[1:]))
+            available_path_bandwidth = min(G[u][v]['capacity'] - G[u][v]['load'] for u, v in zip(candi_app_path, candi_app_path[1:]))
             path_weight  = sum(G[u][v]['weight'] for u, v in zip(shortest_path, shortest_path[1:]))
 
             if available_path_bandwidth >= app_demand and path_weight < 100:
@@ -439,7 +453,21 @@ def service_recovery_duration(app_strategy, current_service_num, redirecting_nod
 
     return disruption_time, degradation_time
 
+def service_repair_reroute(G, source, destination, app_demand):
+    path = []
+    # 构件修复时的服务重路由
+    required_bandwidth = app_demand
+    res = list(islice(nx.shortest_simple_paths(G, source, destination, 'weight'), 5)) # This procedure is based on algorithm by Jin Y. Yen [1]. Finding the first K paths requires O(K N^3) operations
 
+    for shortest_path in res:
+        # Check if the path has enough available bandwidth (first-fit strategy)
+        available_path_bandwidth = min(G[u][v]['capacity'] - G[u][v]['load'] for u, v in zip(shortest_path, shortest_path[1:]))
+        path_weight = sum(G[u][v]['weight'] for u, v in zip(shortest_path, shortest_path[1:]))
+
+        if available_path_bandwidth >= required_bandwidth and path_weight < 100:
+            path = shortest_path
+            break
+    return path
 
 if __name__ == '__main__':
     # 调试尽量分离的重路由算法；

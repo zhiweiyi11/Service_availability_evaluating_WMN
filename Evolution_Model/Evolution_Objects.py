@@ -317,6 +317,7 @@ class Network(nx.Graph): # 表示继承为nx.Graph的子类
             if random_number < link_fail_rate: # 此时链路发生了随机故障
                 self.adj[edge[0]][edge[1]]['weight'] = float('inf')
                 failed_link_num += 1
+                # print('链路{}发生了故障'.format(edge))
             elif link_weight == float('inf'): # 如果原链路本来就中断了,则仍然设置其链路权重为inf
                 self.adj[edge[0]][edge[1]]['weight'] = float('inf')
             else:
