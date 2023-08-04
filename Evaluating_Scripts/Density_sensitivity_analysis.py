@@ -215,8 +215,8 @@ def performance_analysis(Density_list, Beta_list):
 
     save_results(availability_different_beta_global, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Global', N))
 
-    draw_line_plot(Density_list, availability_different_beta_local, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Local', N))
-    draw_line_plot(Density_list, availability_different_beta_global, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Global', N))
+    # draw_line_plot(Density_list, availability_different_beta_local, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Local', N))
+    # draw_line_plot(Density_list, availability_different_beta_global, 'Density敏感性分析-不同性能权重的服务可用度-{}策略,演化N={}次'.format('Global', N))
 
 
     return availability_different_beta_local, availability_different_beta_global
@@ -271,10 +271,10 @@ if __name__ == '__main__':
     ## 服务可用性评估相关的参数
     N = 50
     T = 8760
-    message_processing_time = 0.5  # 单位为秒 s
-    path_calculating_time = 5  # 单位为秒 s
+    message_processing_time = 0.05  # 单位为秒 s
+    path_calculating_time = 0.5  # 单位为秒 s
     detection_rate = 0.99
-    demand_th =  0.2  # 根据App_demand中的均值来确定
+    demand_th =  2*math.pow((1/1),1)*math.exp(-1)  # 根据App_demand中的均值来确定
     beta_list = [0.5]  # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
 
     MTTF = 2000

@@ -16,6 +16,7 @@ from Evolution_Model.Evolution_Objects import *
 from Evolution_Model.Evolution_Conditions import *
 from Evolution_Model.Evolution_Rules import *
 from Evaluating_Scripts.Calculating_Availability import *
+import re
 
 def save_results(origin_df, file_name):
     # 保存仿真的数据
@@ -147,7 +148,7 @@ def resource_analysis(MTTR_list, File_name_list):
 
         t1 = time.time()
         sla_avail_1, whole_avail_1 = calculate_MTTR_analysis(MTTR_list, N, G, Apps, App_priority_list, beta_list)
-        save_results(whole_avail_1, 'MTTR敏感性分析,网络规模[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name[0]+file_name[1], Apps[0].str, N, len(G)))
+        save_results(whole_avail_1, 'MTTR敏感性分析,网络规模{}-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(re.findall(r'\d+',file_name[0]+file_name[1]), Apps[0].str, N, len(G)))
         # availability_different_demand_local.loc[:, file_name] = whole_avail_1.T
         t2 = time.time()
         print('\n 当前{}策略计算的总时长为{}h'.format(Apps[0].str, (t2 - t1) / 3600))
@@ -158,7 +159,7 @@ def resource_analysis(MTTR_list, File_name_list):
 
         t3 = time.time()
         sla_avail_2, whole_avail_2 = calculate_MTTR_analysis(MTTR_list, N, G, Apps, App_priority_list, beta_list)
-        save_results(whole_avail_2, 'MTTR敏感性分析,网络规模[{}]-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(file_name[0]+file_name[1], Apps[0].str, N, len(G)))
+        save_results(whole_avail_2, 'MTTR敏感性分析,网络规模{}-整网平均-{}策略,演化N={}次,{}节点的拓扑'.format(re.findall(r'\d+',file_name[0]+file_name[1]), Apps[0].str, N, len(G)))
         # availability_different_demand_global.loc[:, file_name] = whole_avail_2.T
 
         t4 = time.time()
@@ -281,9 +282,9 @@ if __name__ == '__main__':
     # T = 30 * 24 # 一个月
     T = 8760
     message_processing_time = 0.05 # 单位为秒 50ms
-    path_calculating_time = 5 # 单位为秒 s
+    path_calculating_time = 0.5 # 单位为秒 s
     detection_rate = 0.99
-    demand_th = 0.2 # 根据App_demand中的均值来确定
+    demand_th = 2*math.pow((1/1),1)*math.exp(-1)  # 根据App_demand中的均值来确定
     beta_list = [0.5] # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
 
     MTTF = 2000

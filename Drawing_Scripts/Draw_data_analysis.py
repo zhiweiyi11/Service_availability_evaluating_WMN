@@ -18,6 +18,8 @@ import datetime
 import matplotlib as mpl
 from matplotlib.collections import PatchCollection
 from matplotlib.pyplot import MultipleLocator, FormatStrFormatter
+from scipy import stats
+import scipy.optimize as optimization
 
 def read_data_from_excel(folder_name, file_name):
     # 根据文件夹的名称和文件的名称，读取服务可用性的结果
@@ -54,9 +56,9 @@ def draw_priority_plot(x_data, y_data, analysis_param, filename):
     y_Formatter = FormatStrFormatter('%1.4f') #设置y轴标签文本的格式
     ax.yaxis.set_major_locator(y_Locator)
     ax.yaxis.set_major_formatter(y_Formatter)
-    plt.ylim(top=1)
+    plt.ylim(bottom=0.998, top=1)
 
-    plt.legend(loc="upper right", title="Priority")
+    plt.legend(loc="lower right", title="Priority")
     plt.subplots_adjust(left=0.15)
 
     # plt.savefig(r'.\Pictures_saved\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
@@ -98,6 +100,13 @@ def draw_resource_plot(x_data, y_data, analysis_param, filename):
     pass
 
 
+
+def draw_scatter_plot(x_data, y_data, analysisi_param, filename):
+    # 绘制结果的散点图
+
+    plt.scatter(x_data, y_data, alpha=0.8)
+    plt.show()
+
 def draw_box(data, filename):
     # 绘制箱线图
     df = pd.DataFrame(data)
@@ -112,6 +121,27 @@ def draw_box(data, filename):
     plt.grid()
     plt.show()
 
+def data_fitting(x_data_original, y_data_original, file_name):
+    # 数据拟合
+    xdata = np.array(x_data_original)
+    ydata = np.array(y_data_original)
+
+    # 定义使用的公式|customize equation
+    def lnFunction(x, A, B):
+        return A * np.log(x) + B
+
+    guess = [1, 1]  # 定义初始A、B|initialize a and b
+    try:
+        params, params_covariance = optimization.curve_fit(lnFunction, xdata, ydata,  guess)  # 拟合，A、B结果存入params|curve fitting and store a, b values to params
+        print(params)
+        result = ''  # 输出结果|to store result
+        for i in range(1, 15):
+            result += str(round(lnFunction(i, params[0], params[1]), 2))  # 将i带入公式中的x，使用拟合出的A、B值计算y值，并保留两位小数|calculate result for each i as x using the a, b values, and round the result to 2 points
+            if i != 14:
+                result += ','  # 每个结果用逗号隔开，并省略最后一个逗号|separate each result with comma, and omit the last comma
+        print(result)
+    except:
+        print('')
 
 if __name__ == '__main__':
     # 对MTTF参数的敏感性分析结果进行绘图
@@ -121,7 +151,13 @@ if __name__ == '__main__':
     x_data, y_data = read_data_from_excel(folder_name, file_name)
     draw_priority_plot(x_data, y_data,'MTTF', 'MTTF敏感性分析, Local策略')
 
-    file_name_global = 'MTTF敏感性分析-不同优先级的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_07_11_+08_50'
+    # data_fitting(x_data, y_data, 'MTTF优先级敏感性分析,Local策略')
+    #
+    # file_name_global = 'MTTF敏感性分析-不同优先级的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_07_11_+08_50'
+    #
+    # x_data_global, y_data_global = read_data_from_excel(folder_name, file_name_global)
+    # draw_priority_plot(x_data_global, y_data_global,'MTTF', 'MTTF敏感性分析, Global策略')
 
-    x_data_global, y_data_global = read_data_from_excel(folder_name, file_name_global)
-    draw_priority_plot(x_data_global, y_data_global,'MTTF', 'MTTF敏感性分析, Global策略')
+    file_name_rate = 'RecoveryRate敏感性分析-不同优先级的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_07_13+07_45'
+    x_data_mttr, y_data_mttr = read_data_from_excel(folder_name, file_name_rate)
+    draw_priority_plot(x_data_mttr, y_data_mttr,'recovery_rate', 'MTTR敏感性分析, Global策略')

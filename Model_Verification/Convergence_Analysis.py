@@ -43,8 +43,8 @@ def convergence_analysis(N, T, G, Apps, App_priority_list):
 	random.shuffle(app_priority)
 	for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
 		Apps[i].SLA = app_priority[i]
-		Apps[i].str = 'Global'
-	for n in range(10, N):
+		# Apps[i].str = 'Global'
+	for n in range(5, N):
 		st2_ = time.time()
 
 		# Availability_Results, Loss_Results = Apps_Availability_MC(n, calculateAvailability, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
@@ -71,7 +71,7 @@ def save_results(origin_df, file_name):
 	time2 = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')  # 记录数据存储的时间
 	# sys_path = os.path.abspath('..')  # 表示当前所处文件夹上一级文件夹的绝对路径
 
-	with pd.ExcelWriter( r'..\Results_Output\{}_time{}.xlsx'.format(file_name, time2)) as xlsx:  # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。
+	with pd.ExcelWriter( r'..\Results_Output\Convergence_results\{}_time{}.xlsx'.format(file_name, time2)) as xlsx:  # 将紧跟with后面的语句求值给as后面的xlsx变量，当with后面的代码块全部被执行完之后，将调用前面返回对象的exit()方法。
 		origin_df.to_excel(xlsx, sheet_name='app_avail', index=False)  # 不显示行索引
 		print('数据成功保存')
 
@@ -109,11 +109,11 @@ if __name__ == '__main__':
 	G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters,  Wireless_parameters, Loss_parameters)
 
 	# 业务可用性评估的参数
-	T = 8760
+	T = 876
 	MTTF, MLife = 2000, 800
 	MTTR = 4
 	## 重路由相关的参数
-	message_processing_time = 0.05  # 单位为秒s [毫秒量级]
+	message_processing_time = 0 # 0.05  # 单位为秒s [毫秒量级]
 	path_calculating_time = 5  # 单位为秒 s [秒量级]
 	detection_rate = 0.99
 	demand_th = 1 * 0.2  # 根据App_demand中的均值来确定
@@ -125,7 +125,7 @@ if __name__ == '__main__':
 		Apps[i].SLA = app_priority[i]
 
 	# 收敛性分析的参数
-	N = 100
+	N = 50
 
 	Con_Results = convergence_analysis(N, T, G, Apps, App_priority_list)
 	# 结果保存
