@@ -22,7 +22,7 @@ import pandas as pd
 from sympy import exp
 
 from Evaluating_Scripts.Calculating_Availability import calculateAvailability
-
+from Evolution_Model.Evolution_Rules import *
 
 def RecursionFunc(arr1,arrList):
     # 从arrList中各取出一个元素，并进行组合
@@ -281,7 +281,341 @@ def degradation_time_calculate():
             App_tmp[app_id].outage['degradation'].append(degradation_duration)
     App_tmp[app_id].down_time = degradation_time  # 更新业务降级的时刻
     '''
+def find_alternate_route(G, original_route, faulty_node, app_demand, access_list, exit_list):
+    # 沿着原路径，逐跳寻找符合要求的最短路径【尽量利用原路径策略】
+    alternate_route = []
+    # Create a copy of the original graph
+    alternate_graph = G.copy()
+    # Remove the faulty node from the alternate graph
+    alternate_graph.remove_node(faulty_node)
+    # 确定故障节点在原路径中的位置
+    faulty_index = original_route.index(faulty_node)
 
+    # Initialize the alternate route list with the original route
+    base_route = original_route.copy()
+    base_route.remove(faulty_node) #移除掉原路由中的故障节点的route
+    if faulty_index == 0:
+        access_list.remove(faulty_node)
+        if len(access_list) > 0:  # 如果业务有其余可以接入的节点list
+            available_access_list = []  # 当前演化态下存储可接入节点的list
+            for n in access_list:
+                if  n not in original_route: # 避免从已有的路径中选择source节点
+                    available_access_list.append(n)
+            if available_access_list:  # 如果存在可接入的节点list
+                new_source = random.choice(available_access_list)
+                base_route.insert(0, new_source) # 在list的头部添加新的路由节点
+            else:
+                return alternate_route
+    if faulty_index == len(original_route)-1:
+        exit_list.remove(faulty_node)
+        if len(exit_list) > 0:
+            available_exit_list = []
+            for n in exit_list:
+                if n not in original_route:
+                    available_exit_list.append(n)
+            if available_exit_list:
+                new_destination = random.choice(available_exit_list)
+                base_route.append(new_destination)
+            else:
+                return alternate_route
+    left = 0
+    right = 1
+    # 采用双指针来遍历求解Local策略的尽量重用最短路径
+    alternate_route.append(base_route[0])
+
+    # 1.直接计算绕过 faulty_node 的恢复路径
+
+    # 2. 如果恢复路径长度超过5跳，则向前继续计算；
+
+    # 3. 直到遍历完整个路径或者是找到符合要求的路径跳出循环
+
+    for i in range(1, min(5, len(original_route) - faulty_index)):
+        u = original_route[faulty_index-1]
+        v = original_route[faulty_index+1]
+        res_paths = list(islice(nx.shortest_simple_paths(alternate_graph, u, v, 'weight'), 5))
+
+    while right < len(base_route): #循环结束的条件为右边指针到达base_route的末尾位置
+        u = base_route[left]
+        v = base_route[right]
+        if alternate_graph.has_edge(u, v):
+            # If the edge is present, add it to the alternate route
+            alternate_route.append(v)
+            alternate_graph.remove_node(u) # 删除已确定为业务路由的节点
+            left += 1
+            right += 1
+        else:
+            try:
+                # shortest_path = nx.shortest_path(alternate_graph, u, v, 'weight')
+                res_paths = list(islice(nx.shortest_simple_paths(alternate_graph, u, v, 'weight'), 5))
+                available_path = []
+                for path in res_paths:
+                    weight_sum = sum(alternate_graph[i][j]['weight'] for i, j in zip(path, path[1:]))
+                    if weight_sum != float('inf'):
+                        available_path.append(path)
+
+                shortest_path_list = []
+                # find_available_path(G, app_demand, shortest_path, faulty_node)
+                for p in available_path: # 从可用路径集中找到跳数不超过5的路径
+                    if len(p) < 5:  # 如果最短路径的跳数超过5跳则重新选择最短路计算的源节点
+                        dup = find_duplicates(p)
+                        if dup:
+                            print('当前计算的最短路径存在重复节点\n')
+                        shortest_path_list.append(p)
+                shortest_path = find_available_path(G, app_demand, shortest_path_list, faulty_node)
+                if shortest_path: # 如果找到了符合条件的最短路
+                    alternate_route += shortest_path[1:]
+                    left += 1
+                    right += 1
+                else:
+                    right += 1
+
+            except nx.NetworkXNoPath:
+                return None
+    # 最后校验一下是否找到符合源宿节点要求的路径
+    destination = alternate_route[-1]
+    if destination != base_route[-1]:
+        alternate_route = []# 将计算的替代路径清空
+
+    '''
+    # Iterate over each node in the original route
+    alternate_route.append(base_route[0])
+    for i in range(len(base_route) - 1): # 沿原路径上的节点去寻找替代的路由
+        # u = original_route[i]
+        # v = original_route[i + 1]
+
+        u = base_route[i]
+        v = base_route[i + 1]
+        # Check if the edge between u and v is present in the alternate graph
+        if alternate_graph.has_edge(u, v) and alternate_graph.edges[u,v]['weight'] != float('inf'):
+            # If the edge is present, add it to the alternate route
+            alternate_route.append(v)
+        else:
+            # If the edge is not present, find an alternate path between u and v in the alternate graph
+            try:
+                # Find the shortest path between u and v in the alternate graph
+                shortest_path = nx.shortest_path(alternate_graph, u, v, 'weight')
+                if len(shortest_path) > 5: # 如果最短路径的跳数超过5跳则重新选择最短路计算的源节点
+                    # u = base_route[i]
+                    v = base_route[i+2]
+                # Append the shortest path (excluding the first node, which is u) to the alternate route
+                else:
+                    alternate_route += shortest_path[1:]
+
+            except nx.NetworkXNoPath:
+                # If no path is found between u and v, return None to indicate that no alternate route exists
+                return None
+    '''
+    dup = find_duplicates(alternate_route)
+    if dup:
+        print('当前计算的最短路径存在重复节点\n')
+    return alternate_route
+
+def find_local_route(G, original_route, faulty_node):
+    alternate_route = []
+    max_hop = 5
+    # Create a copy of the original graph
+    alternate_graph = G.copy()
+    # Remove the faulty node from the alternate graph
+    alternate_graph.remove_node(faulty_node)
+    # 确定故障节点在原路径中的位置
+    faulty_index = original_route.index(faulty_node)
+    pred_nodes = original_route[ :faulty_index] # 业务原路由故障节点的前继节点
+    pred_nodes_flip = pred_nodes[::-1] #将前继节点中的元素进行翻转
+    succ_nodes = original_route[faulty_index+1: ] # 业务原路由故障节点的后继节点
+
+    available_path = []
+    for node in pred_nodes[]+succ_nodes[]:
+        set_node_adj_weight(node, 'faulty')  # 将其余节点的邻接链路设置为inf
+
+    for i in range(len(pred_nodes)):
+        source = pred_nodes[i]
+        set_node_adj_weight(source, 'operational')
+
+        for j in range(len(succ_nodes)):
+            target = succ_nodes[j]
+            set_node_adj_weight(target, 'operational')
+
+            # res_paths = list(islice(nx.shortest_simple_paths(alternate_graph, source, destination, 'weight'), 5))
+            sub_path = nx.shortest_path(alternate_graph, source, target, 'weight')
+            weight_sum = sum(alternate_graph[i][j]['weight'] for i, j in zip(sub_path, sub_path[1:]))
+            if weight_sum != float('inf') and len(sub_path) < max_hop+i+j:
+                available_path.append(sub_path)
+                break
+
+    return available_path
+
+
+def find_duplicates(lst):
+    # Create an empty set for tracking duplicates
+    duplicates = set()
+    # Create an empty set for tracking seen elements
+    seen = set()
+    for element in lst:
+        if element in seen:
+            duplicates.add(element)
+        else:
+            seen.add(element)
+    return duplicates
+
+def find_local_route_2(G_sample, app_original_path, app_demand, faulty_node, source, destination ):
+    # 计算Local策略【尽量重用原路径】下的重路由
+    # 在计算子路径之前，将现有的可用节点的相邻链路的权重设置为无穷
+    K = 5
+    max_hops = 6
+    original_path_length = len(app_original_path)
+    faulty_index = app_original_path.index(faulty_node)
+    route_source = source
+    route_destination = destination
+    available_subpaths = [] # 计算符合条件的候选路径集合
+
+    for n in app_original_path:
+        if n != source and n != destination:  # G_sample.nodes[n]['alive'] == 1
+            set_node_adj_weight(G_sample, n, 'faulty')
+
+    if faulty_index == 0:  # 如果是源节点故障
+        for i in range( original_path_length - 2): # 利用原路径多的那一侧
+            optional_subpaths = list(islice(nx.shortest_simple_paths(G_sample, route_source, route_destination, 'weight'), K))
+            # available_path = [] # 存储链路权重不为inf的最短路径
+            for path in optional_subpaths:
+                if faulty_node in path: # 如果新路径中存在故障节点
+                    continue
+                else:
+                    # weight_sum = sum(G_sample[i][j]['weight'] for i, j in zip(path, path[1:]))
+                    # if weight_sum != float('inf') and len(path) < max_hops+i:
+                    if len(path) < max_hops + i:
+                        available_subpaths.append(path)
+            if available_subpaths:
+                break
+            else:
+                route_destination = app_original_path[i+2]
+                set_node_adj_weight(G_sample, route_destination, 'operational')
+
+    elif faulty_index == original_path_length - 1:
+        for i in range( original_path_length - 2): # 利用原路径多的那一侧
+            optional_subpaths = list(islice(nx.shortest_simple_paths(G_sample, route_source, route_destination, 'weight'), K))
+            # available_path = [] # 存储链路权重不为inf的最短路径
+            for path in optional_subpaths:
+                if faulty_node in path: # 如果新路径中存在故障节点
+                    continue
+                else:
+                    # weight_sum = sum(G_sample[i][j]['weight'] for i, j in zip(path, path[1:]))
+                    # if weight_sum != float('inf') and len(path) < max_hops + i:
+                    if len(path) < max_hops + i:
+                        available_subpaths.append(path)
+            if available_subpaths:
+                break
+            else:
+                route_source = app_original_path[faulty_index-i-2]
+                set_node_adj_weight(G_sample, route_source, 'operational')
+    else:
+        for i in range( max(faulty_index-2, original_path_length - faulty_index-2)): # 利用原路径多的那一侧
+            # print('当前的循环次数i={}'.format(i))
+            optional_subpaths = list(islice(nx.shortest_simple_paths(G_sample, route_source, route_destination, 'weight'), K))
+            # available_path = [] # 存储链路权重不为inf的最短路径
+            for path in optional_subpaths:
+                if faulty_node in path: # 如果新路径中存在故障节点
+                    # print('故障节点{}在计算得到的路径中{}'.format(faulty_node,path))
+                    continue
+                else:
+                    # weight_sum = sum(G_sample[i][j]['weight'] for i, j in zip(path, path[1:]))
+                    # if weight_sum != float('inf') and len(path) < max_hops+i:
+                    if len(path) < max_hops + i:
+                        available_subpaths.append(path)
+                        # print('可用的子路径为{}'.format(path))
+            if available_subpaths:
+                # print('子路径计算成功，为{}'.format(available_subpaths))
+                break # 跳出循环
+            elif faulty_index >= original_path_length/2: # 如果当前故障节点位于原业务路由的右侧，则将搜索的destination往左移，尽量重用右侧的路径
+                route_source = app_original_path[faulty_index-i-2]
+                set_node_adj_weight(G_sample, route_source, 'operational')
+            else:
+                route_destination = app_original_path[faulty_index+i+2]
+                set_node_adj_weight(G_sample, route_destination, 'operational')
+
+    new_subpath = find_available_path(G_sample, app_demand, available_subpaths, faulty_node) # 这只能找到子路径上的路径带宽是否满足
+
+    return new_subpath
+def set_node_adj_weight(G, node, strategy):
+    if strategy == 'operational':
+        adj_nodes = list(G.adj[node])
+        for adj in adj_nodes:
+            G.adj[node][adj]['weight'] = 1  # 将节点邻接的边的权重设置为1
+
+    if strategy == 'faulty':
+        adj_nodes = list(G.adj[node])
+        for adj in adj_nodes:
+            G.adj[node][adj]['weight'] = float('inf')  # 将节点邻接的边的权重设置为无穷大
+
+
+def calculate_local_route(G, original_route, faulty_node, access_list, exit_list):
+
+    available_path = []
+    max_hop = 5
+    # Create a copy of the original graph
+    alternate_graph = G.copy()
+    # Remove the faulty node from the alternate graph
+    alternate_graph.remove_node(faulty_node)
+    access = access_list.copy()
+    exit = exit_list.copy()
+    # 确定故障节点在原路径中的位置
+    faulty_index = original_route.index(faulty_node)
+    pred_nodes, succ_nodes = [], []
+
+    if faulty_index == 0:
+        access.remove(faulty_node)
+        if len(access) > 0:  # 如果业务有其余可以接入的节点list
+            available_access_list = []  # 当前演化态下存储可接入节点的list
+            for n in access:
+                if n not in original_route:  # 避免从已有的路径中选择source节点
+                    available_access_list.append(n)
+            if available_access_list:  # 如果存在可接入的节点list
+                new_source = random.choice(available_access_list)
+                pred_nodes = [new_source]
+                succ_nodes = original_route[faulty_index+1:]
+
+    elif faulty_index == len(original_route)-1:
+        exit.remove(faulty_node)
+        if len(exit) > 0:
+            available_exit_list = []
+            for n in exit:
+                if n not in original_route:
+                    available_exit_list.append(n)
+            if available_exit_list:
+                new_destination = random.choice(available_exit_list)
+                succ_nodes = [new_destination]
+                pred_nodes = original_route[:faulty_index]
+    else:
+        pred_nodes = original_route[:faulty_index]  # 业务原路由故障节点的前继节点
+        succ_nodes = original_route[faulty_index + 1:]  # 业务原路由故障节点的后继节点
+
+    pred_nodes_flip = pred_nodes[::-1]  # 将前继节点中的元素进行翻转
+
+    for node in pred_nodes+succ_nodes:
+        set_node_adj_weight(alternate_graph, node, 'faulty')  # 将其余节点的邻接链路设置为inf
+    flag = 0
+    for i in range(len(pred_nodes_flip)):
+        source = pred_nodes_flip[i]
+        set_node_adj_weight(alternate_graph, source, 'operational')
+
+        for j in range(len(succ_nodes)):
+            target = succ_nodes[j]
+            set_node_adj_weight(alternate_graph, target, 'operational')
+
+            # res_paths = list(islice(nx.shortest_simple_paths(alternate_graph, source, destination, 'weight'), 5))
+            sub_path = nx.shortest_path(alternate_graph, source, target, 'weight')
+            weight_sum = sum(alternate_graph[i][j]['weight'] for i, j in zip(sub_path, sub_path[1:]))
+            if weight_sum != float('inf') and len(sub_path) < max_hop + i + j:
+                available_path.append(sub_path)
+                dup = find_duplicates(sub_path)
+                if dup:
+                    print('当前的链路节点计算重复')
+                flag += 1
+
+        if flag > 5: # 设定重路由发起的次数
+            break
+
+
+    return available_path
 
 if __name__ == '__main__':
     # m = 4
