@@ -5,7 +5,7 @@
 @IDE    ：PyCharm
 @Author ：Yi Zhiwei
 @Date   ：2023/6/19 12:16
-@Desc   ：数据结果绘图的代码
+@Desc   ：数据MTTR敏感性分析结果绘图的代码
 =================================================='''
 
 import networkx as nx
@@ -49,19 +49,19 @@ def draw_priority_plot(x_data, y_data, analysis_param, filename):
         ax.plot(x_data, y_data[i],c=colors[i],alpha = 0.5,marker='o', label='${}$'.format(i+1)) # i+1表示业务等级
 
     # ax.set_xlim(x_data[0]-3, x_data[-1]+3)
-    ax.set_xlabel('${}$ of network nodes'.format(analysis_param), fontdict=font)
+    ax.set_xlabel('${}$ of network nodes'.format('MTTR'), fontdict=font)
     ax.set_ylabel('Service availability', fontdict=font)
 
-    y_Locator = MultipleLocator(0.0002) # 设置y轴刻度标签为 0.0001 的倍数
+    y_Locator = MultipleLocator(0.0001) # 设置y轴刻度标签为 0.0001 的倍数
     y_Formatter = FormatStrFormatter('%1.4f') #设置y轴标签文本的格式
     ax.yaxis.set_major_locator(y_Locator)
     ax.yaxis.set_major_formatter(y_Formatter)
-    plt.ylim(bottom=0.998, top=1)
+    plt.ylim(bottom=0.999, top=1)
 
-    plt.legend(loc="lower right", title="Priority")
+    plt.legend(title="Priority") # loc="lower right",
     plt.subplots_adjust(left=0.15)
 
-    # plt.savefig(r'.\Pictures_saved\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
+    plt.savefig(r'..\Pictures_saved\MTTR\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
     plt.show()
 
 def draw_performance_plot(x_data, y_data, analysis_param, fileneme):
@@ -70,7 +70,7 @@ def draw_performance_plot(x_data, y_data, analysis_param, fileneme):
             'color': 'black',
             'weight': 'normal',
             'size': 14, }  # 字体设置
-    Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
+    Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9] # 修改为对应的bandwidth和demand的label
 
     # 绘制带标签的折线图
     time = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')  # 记录数据存储的时间
@@ -80,24 +80,50 @@ def draw_performance_plot(x_data, y_data, analysis_param, fileneme):
     for i in range(len(y_data)):
         ax.plot(x_data, y_data[i], c=colors[i], alpha=0.5, marker='o', label='$beta$={}'.format(Beta_list[i]))
 
-    ax.set_xlabel('${}$ of network nodes'.format(analysis_param), fontdict=font)
+    ax.set_xlabel('${}$ of network nodes'.format('MTTR'), fontdict=font)
     ax.set_ylabel('Service availability', fontdict=font)
 
-    y_Locator = MultipleLocator(0.0002) # 设置y轴刻度标签为 0.0001 的倍数
+    y_Locator = MultipleLocator(0.0001) # 设置y轴刻度标签为 0.0001 的倍数
     y_Formatter = FormatStrFormatter('%1.4f') #设置y轴标签文本的格式
     ax.yaxis.set_major_locator(y_Locator)
     ax.yaxis.set_major_formatter(y_Formatter)
-    plt.ylim(top=1)
+    plt.ylim(bottom=0.999,top=1)
 
-    plt.legend(loc="upper right", title="Priority")
+    plt.legend(loc="upper right", title="Weight")
     plt.subplots_adjust(left=0.15)
 
-    # plt.savefig(r'.\Pictures_saved\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
+    # plt.savefig(r'..\Pictures_saved\MTTR\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
     plt.show()
 
 def draw_resource_plot(x_data, y_data, analysis_param, filename):
     # 绘制资源需求分析的折线图
-    pass
+    font = {'family': 'serif',
+            'color': 'black',
+            'weight': 'normal',
+            'size': 14, }  # 字体设置
+    marker_list = ['o', 'v', '^', '*']
+    # 绘制带标签的折线图
+    time = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')  # 记录数据存储的时间
+    fig, ax = plt.subplots()
+    fig.subplots_adjust(hspace=0.5)  # make a little extra space between the subplots
+    colors = ['goldenrod', 'darkred', 'royalblue','purple' ]
+    for i in range(len(y_data)):
+        ax.plot(x_data[2:], y_data[i][2:], c=colors[i], alpha=0.5, marker=marker_list[i], label='$\mathcal{B}$='+'{},'.format(int(y_data[i][0]))+'$\mathcal{D}$='+'{}'.format(int(y_data[i][1]))) #$\mathcal{B}$=$\mathcal{D}$
+
+    ax.set_xlabel('${}$ of network nodes'.format('MTTR'), fontdict=font)
+    ax.set_ylabel('Service availability', fontdict=font)
+
+    y_Locator = MultipleLocator(0.0005)  # 设置y轴刻度标签为 0.0001 的倍数
+    y_Formatter = FormatStrFormatter('%1.4f')  # 设置y轴标签文本的格式
+    ax.yaxis.set_major_locator(y_Locator)
+    ax.yaxis.set_major_formatter(y_Formatter)
+    plt.ylim(bottom=0.996,top=1)
+
+    plt.legend(title="") # loc="upper right",
+    plt.subplots_adjust(left=0.15)
+
+    plt.savefig(r'..\Pictures_saved\MTTR\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time), dpi=1200)
+    plt.show()
 
 
 
@@ -145,19 +171,27 @@ def data_fitting(x_data_original, y_data_original, file_name):
 
 if __name__ == '__main__':
     # 对MTTF参数的敏感性分析结果进行绘图
-    folder_name = 'Beijing713'
-    file_name = 'MTTF敏感性分析-不同优先级的服务可用度-Local策略,演化N=50次,100节点的拓扑_2023_07_10_+03_19'
+    folder_name = 'MTTR'
+    file_name = 'MTTR敏感性分析-不同优先级的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_08_05+23_09'
 
-    x_data, y_data = read_data_from_excel(folder_name, file_name)
-    draw_priority_plot(x_data, y_data,'MTTF', 'MTTF敏感性分析, Local策略')
+    x_data_Global, y_data_Global = read_data_from_excel(folder_name, file_name)
+    draw_priority_plot(x_data_Global, y_data_Global,'MTTR优先级分析', ' Global策略')
 
-    # data_fitting(x_data, y_data, 'MTTF优先级敏感性分析,Local策略')
-    #
-    # file_name_global = 'MTTF敏感性分析-不同优先级的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_07_11_+08_50'
-    #
-    # x_data_global, y_data_global = read_data_from_excel(folder_name, file_name_global)
-    # draw_priority_plot(x_data_global, y_data_global,'MTTF', 'MTTF敏感性分析, Global策略')
 
-    file_name_rate = 'RecoveryRate敏感性分析-不同优先级的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_07_13+07_45'
-    x_data_mttr, y_data_mttr = read_data_from_excel(folder_name, file_name_rate)
-    draw_priority_plot(x_data_mttr, y_data_mttr,'recovery_rate', 'MTTR敏感性分析, Global策略')
+
+    # file_name_2= 'MTTR敏感性分析-不同优先级的服务可用度-Local策略,演化N=50次,100节点的拓扑_2023_08_05+08_03'
+    # x_data_Local, y_data_Local = read_data_from_excel(folder_name, file_name_2)
+    # draw_priority_plot(x_data_Local, y_data_Local,'MTTR', '优先级分析, Local策略')
+
+
+    # file_name_resource = 'MTTR敏感性分析-不同网络规模汇总-Global策略-20230814'
+    # x_data_Global, y_data_Global = read_data_from_excel(folder_name, file_name_resource)
+    # draw_resource_plot(x_data_Global, y_data_Global, 'MTTR网络资源可用性分析','Global策略')
+
+    # file_name_resource_2 = 'MTTR敏感性分析-不同网络规模汇总-Local策略-20230814'
+    # x_data_Local, y_data_Local = read_data_from_excel(folder_name, file_name_resource_2)
+    # draw_resource_plot(x_data_Local, y_data_Local, 'MTTR网络资源可用性分析','Local策略')
+
+    # file_name_performance = 'MTTR敏感性分析-不同性能权重的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_08_12+03_05'
+    # x_data_Global, y_data_Global = read_data_from_excel(folder_name, file_name_performance)
+    # draw_performance_plot(x_data_Global, y_data_Global, 'MTTR 性能权重分析', 'Global策略')
