@@ -530,10 +530,10 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
 
     for i in range(len(App_coordinates)):
         #　随机选择2个不重复的网格节点来作为业务的od对
-        app_od_coord = random.sample(TrafficDensity[0].keys(), 2)
+        app_od_coord = random.sample(list(TrafficDensity[0].keys()), 2)
         # od_list = []
         while True:
-            print('计算业务的接入和接出节点\n')
+            print('计算业务的接入和接出节点 \n')
             App_coordinates[i] = app_od_coord
             App_access = access_mapping(Node_Coordinates, App_coordinates, CV_range)
             access = App_access[0][i]
@@ -542,7 +542,7 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
                 od_list = RecursionFunc(access, [exit])
                 break
             else:
-                app_od_coord = random.sample(TrafficDensity[0].keys(), 2)
+                app_od_coord = random.sample(list(TrafficDensity[0].keys()), 2)
 
         priority = App_Priority[i]
         # demand = App_traffic[i] # 业务的流量从密度矩阵中生成
@@ -573,7 +573,7 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
             if od_list: # 如果业务的od节点可选集合不为空
                 od_list.remove(tmp_od) # 删除掉不满足业务请求的od对
                 print('删除的业务{}的od对为{},剩余的od对列表长度为{}'.format(i, tmp_od, len(od_list)))
-                if od_list: # 如果业务的od对列表为空则跳出循环
+                if not od_list: # 如果业务的od对列表为空则跳出循环
                     print('第{}个业务初始路径部署失败...'.format(i))
                     break
 
@@ -650,7 +650,7 @@ if __name__ == '__main__':
     # Area_width, Area_length = 500,500# 250, 200
     # Coordinates = generate_positions(Node_num, Area_size[0], Area_size[1], save_data)
     # Coordinates_sample = generate_PPP_distribution(Area_size, Node_num, save_data) # 当节点传输半径较小时，通过增加节点的数量来保证网络的连通性
-    Coordinates_file =  'Node_Coordinates_100_Uniform[for_priority_analysis]' # 'Different_resourceAndDemand_Topology=100+App=50\\Node_Coordinates_100_Uniform'
+    Coordinates_file =  'Different_resourceAndDemand_Topology=100+App=50\\Node_Coordinates_100_Uniform' # 'Node_Coordinates_100_Uniform[for_priority_analysis]'
     Coordinates_df = pd.read_excel( r"..\Results_Saving\{}.xlsx".format(Coordinates_file), sheet_name=0, index_col=0)
     Coordinates = dict(zip(Coordinates_df.index, Coordinates_df.values))
 
@@ -670,8 +670,8 @@ if __name__ == '__main__':
     App_num = 50
     grid_size = 5
     traffic_th = 1 # 业务网格的流量阈值
-    Demand = 5
-    App_Demand_generation = np.random.normal(loc=Demand, scale=1, size=App_num) # 生成平均值为3，标准差为1的业务带宽请求的整体分布
+    Demand = 3
+    App_Demand_generation = np.random.normal(loc=Demand, scale=Demand/5, size=App_num) # 生成平均值为3，标准差为1的业务带宽请求的整体分布
     App_Demand = [] # 确保生成的所有业务需求值为正
     for d in App_Demand_generation:
         if d > 0:
@@ -687,12 +687,12 @@ if __name__ == '__main__':
 
     # 确定是否从文件导入数据
     import_topology_file = True # 不从文件中导入拓扑数据
-    file_name = 'Topology_100_Band=10[for_priority_analysis]' # 'Different_resourceAndDemand_Topology=100+App=50\\Topology_100_Band=20'
+    file_name = 'Different_resourceAndDemand_Topology=100+App=50\\Topology_100_Band=10' # 'Topology_100_Band=10[for_priority_analysis]'
 
     ## 这是初始随机生成网络及业务对象的代码
     G = Network(Topology, transmit_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_topology_file, file_name)
     G, Apps = init_func(G, Coordinates, Area_size, CV_range,  grid_size, traffic_th, App_num, App_Demand, App_Priority, App_Strategy)
-    # #
+    # # #
     Edges_info = {}
     edges_list = list(G.edges)
     for i in range(len(edges_list)):

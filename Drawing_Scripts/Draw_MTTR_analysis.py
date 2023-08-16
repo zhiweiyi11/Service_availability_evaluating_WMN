@@ -61,7 +61,7 @@ def draw_priority_plot(x_data, y_data, analysis_param, filename):
     plt.legend(title="Priority") # loc="lower right",
     plt.subplots_adjust(left=0.15)
 
-    plt.savefig(r'..\Pictures_saved\MTTR\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
+    # plt.savefig(r'..\Pictures_saved\MTTR\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
     plt.show()
 
 def draw_performance_plot(x_data, y_data, analysis_param, fileneme):

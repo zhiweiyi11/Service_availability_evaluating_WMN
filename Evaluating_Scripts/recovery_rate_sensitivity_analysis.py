@@ -133,9 +133,12 @@ def resource_analysis(RecoveryRate_list, File_name_list):
 
     directory_path = 'Different_resourceAndDemand_Topology=100+App=50\\'
     Coordinates_file_name =  directory_path + 'Node_Coordinates_100_Uniform'
-    file_name_list = [['Topology_100_Band=10', 'App_50_Demand=2_inTopo=100_Band=10'], ['Topology_100_Band=10', 'App_50_Demand=5_inTopo=100_Band=10'],
-                      ['Topology_100_Band=20', 'App_50_Demand=2_inTopo=100_Band=20'],
-                      ['Topology_100_Band=20', 'App_50_Demand=5_inTopo=100_Band=20']]  # 待读取的文件列表
+    # file_name_list = [['Topology_100_Band=10', 'App_50_Demand=2_inTopo=100_Band=10'], ['Topology_100_Band=10', 'App_50_Demand=5_inTopo=100_Band=10'],
+    #                   ['Topology_100_Band=20', 'App_50_Demand=2_inTopo=100_Band=20'],
+    #                   ['Topology_100_Band=20', 'App_50_Demand=5_inTopo=100_Band=20']]  # 待读取的文件列表
+    file_name_list = [['Topology_100_Band=10', 'App_50_Demand=1_inTopo=100_Band=10'], ['Topology_100_Band=10', 'App_50_Demand=2_inTopo=100_Band=10'],
+                      ['Topology_100_Band=10', 'App_50_Demand=3_inTopo=100_Band=10'], ['Topology_100_Band=10', 'App_50_Demand=4_inTopo=100_Band=10'],
+                      ['Topology_100_Band=10', 'App_50_Demand=5_inTopo=100_Band=20']]  # 待读取的文件列表
 
     availability_different_demand_local = pd.DataFrame(index=RecoveryRate_list) # 存储结果
     availability_different_demand_global = pd.DataFrame(index=RecoveryRate_list)
