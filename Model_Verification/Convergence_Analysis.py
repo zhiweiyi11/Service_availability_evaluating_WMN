@@ -44,7 +44,7 @@ def convergence_analysis(N, T, G, Apps, App_priority_list):
 	for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
 		Apps[i].SLA = app_priority[i]
 		# Apps[i].str = 'Global'
-	for n in range(5, N):
+	for n in range(10, N):
 		st2_ = time.time()
 
 		# Availability_Results, Loss_Results = Apps_Availability_MC(n, calculateAvailability, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
@@ -109,14 +109,14 @@ if __name__ == '__main__':
 	G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters,  Wireless_parameters, Loss_parameters)
 
 	# 业务可用性评估的参数
-	T = 876
+	T = 8760
 	MTTF, MLife = 2000, 800
 	MTTR = 4
 	## 重路由相关的参数
-	message_processing_time = 0 # 0.05  # 单位为秒s [毫秒量级]
-	path_calculating_time = 5  # 单位为秒 s [秒量级]
+	message_processing_time = 0.05 # 0.05  # 单位为秒s [毫秒量级]
+	path_calculating_time = 0.5  # 单位为秒 s [秒量级]
 	detection_rate = 0.99
-	demand_th = 1 * 0.2  # 根据App_demand中的均值来确定
+	demand_th = 2*math.pow((1/1),1)*math.exp(-1)  # 根据App_demand中的均值来确定
 	beta_list = [0.5]  # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
 	App_priority_list = [1, 2, 3, 4, 5]
 	app_priority = App_priority_list * int(len(Apps) / len(App_priority_list))
@@ -125,7 +125,7 @@ if __name__ == '__main__':
 		Apps[i].SLA = app_priority[i]
 
 	# 收敛性分析的参数
-	N = 50
+	N = 100
 
 	Con_Results = convergence_analysis(N, T, G, Apps, App_priority_list)
 	# 结果保存

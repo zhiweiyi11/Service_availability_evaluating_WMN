@@ -19,7 +19,7 @@ import os
 from multiprocessing import  cpu_count
 
 import pandas as pd
-from numba.cuda.cudadrv.runtime import Runtime
+# from numba.cuda.cudadrv.runtime import Runtime
 
 from Evolution_Model.Evolution_Objects import *
 from Evolution_Model.Evolution_Conditions import *

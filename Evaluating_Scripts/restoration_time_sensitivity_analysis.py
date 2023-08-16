@@ -288,13 +288,13 @@ if __name__ == '__main__':
     MTTR = 4
     RestorationTime_list = np.linspace(0.1, 5, 26)# 60个点，步长为0.2s
 
-    # G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
+    G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
 
-    # res_local, res_global = priority_analysis(RestorationTime_list, App_priority_list, G, Apps)
+    res_local, res_global = priority_analysis(RestorationTime_list, App_priority_list, G, Apps)
 
     File_name_list = ['暂无，从函数中内置了待读取的文件列表']
     local_, global_ = resource_analysis(RestorationTime_list, File_name_list)
 
-    # Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
-    # local_res, global_res = performance_analysis(RestorationTime_list, Beta_list, G, Apps)
+    Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
+    local_res, global_res = performance_analysis(RestorationTime_list, Beta_list, G, Apps)
 

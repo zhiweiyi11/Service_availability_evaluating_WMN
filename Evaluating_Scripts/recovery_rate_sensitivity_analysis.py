@@ -293,13 +293,13 @@ if __name__ == '__main__':
 
     RecoveryRate_list = np.linspace(0.8,0.99, 20) # 20个点
 
-    # G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
-    #
-    #
-    # res_local, res_global = priority_analysis(RecoveryRate_list, App_priority_list, G, Apps)
+    G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters, Wireless_parameters, Loss_parameters)
+
+
+    res_local, res_global = priority_analysis(RecoveryRate_list, App_priority_list, G, Apps)
 
     File_name_list = ['暂无，从函数中内置了待读取的文件列表']
-    local_, global_ = resource_analysis(RecoveryRate_list, File_name_list)
+    # local_, global_ = resource_analysis(RecoveryRate_list, File_name_list)
 
     Beta_list = [0.1, 0.3, 0.5, 0.7, 0.9]
-    # local_res, global_res = performance_analysis(RecoveryRate_list, Beta_list, G, Apps)
+    local_res, global_res = performance_analysis(RecoveryRate_list, Beta_list, G, Apps)
