@@ -66,7 +66,7 @@ if __name__ == '__main__':
     message_processing_time = 0.05#.05  # 单位为秒s [毫秒量级]
     path_calculating_time = 0.5 #.5  # 单位为秒 s [秒量级]
     detection_rate = 1
-    demand_th = 0.8  # 根据App_demand中的均值来确定,表示性能损失占业务带宽需求的比例
+    demand_th = 2*math.pow((1/1),1)*math.exp(-1)  # 根据App_demand中的均值来确定,表示性能损失占业务带宽需求的比例
     beta_list = [0.5]  # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
     App_priority_list = [1, 2, 3, 4, 5]
     # app_priority = App_priority_list * int(len(Apps) / len(App_priority_list))

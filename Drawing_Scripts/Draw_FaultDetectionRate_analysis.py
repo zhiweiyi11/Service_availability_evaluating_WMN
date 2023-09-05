@@ -1,9 +1,13 @@
 #!/usr/bin/env python
-# -*- coding: UTF-8 -*-
-
-''' ====================
-绘制节点MTTF的敏感性分析的结果
-======================'''
+# -*- coding: utf-8 -*-
+''' =====================================
+# @Time    : 2023/9/4 21:17
+# @Author  : Yi Zhiwei
+# @IDE     : PyCharm
+# @File    : Draw_FaultDetectionRate_analysis.py
+# @Software: PyCharm
+# Desc     : 绘制“故障检测率”对服务可用度的敏感性分析
+======================================'''
 
 
 import networkx as nx
@@ -44,19 +48,20 @@ def draw_priority_analysis(x_data, y_data, analysis_param, filename):
         ax.plot(x_data, y_data[i],c=colors[i],alpha = 0.5,marker='o', label='${}$'.format(i+1)) # i+1表示业务等级
 
     # ax.set_xlim(x_data[0]-3, x_data[-1]+3)
-    ax.set_xlabel('${}$ of network nodes'.format('MTTF'), fontdict=font)
+    ax.set_xlabel(r'Fault detection rate $\rho$ ', fontdict=font)
     ax.set_ylabel('Service availability', fontdict=font)
 
-    y_Locator = MultipleLocator(0.0001) # 设置y轴刻度标签为 0.0001 的倍数
+    y_Locator = MultipleLocator(0.0005) # 设置y轴刻度标签为 0.0001 的倍数
     y_Formatter = FormatStrFormatter('%1.4f') #设置y轴标签文本的格式
     ax.yaxis.set_major_locator(y_Locator)
     ax.yaxis.set_major_formatter(y_Formatter)
-    plt.ylim(bottom=0.9992, top=1) # Local策略下设置为0.9992，使得不同priority之间的结果更明显
+    # plt.xlim(left=0.8, right=0.99)
+    plt.ylim(bottom=0.995, top=1) # Local策略下设置为0.9992，使得不同priority之间的结果更明显
 
     plt.legend(loc="lower right",title="Priority") # loc="lower right",
     plt.subplots_adjust(left=0.15)
 
-    plt.savefig(r'..\Pictures_saved\MTTF\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
+    plt.savefig(r'..\Pictures_saved\Restoration_Rate\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
     plt.show()
 
 def draw_resource_plot(x_data, y_data, analysis_param, filename):
@@ -74,7 +79,7 @@ def draw_resource_plot(x_data, y_data, analysis_param, filename):
     for i in range(len(y_data)):
         ax.plot(x_data[2:], y_data[i][2:], c=colors[i], alpha=0.5, marker=marker_list[i], label='$\mathcal{B}$='+'{},'.format(int(y_data[i][0]))+'$\mathcal{D}$='+'{}'.format(int(y_data[i][1]))) #$\mathcal{B}$=$\mathcal{D}$
 
-    ax.set_xlabel('${}$ of network nodes'.format('MTTF'), fontdict=font)
+    ax.set_xlabel(r'Fault detection rate $\rho$'.format('MTTF'), fontdict=font)
     ax.set_ylabel('Service availability', fontdict=font)
 
     y_Locator = MultipleLocator(0.001)  # 设置y轴刻度标签为 0.0001 的倍数
@@ -86,31 +91,29 @@ def draw_resource_plot(x_data, y_data, analysis_param, filename):
     plt.legend(loc='lower right') # loc="upper right",
     plt.subplots_adjust(left=0.15)
 
-    plt.savefig(r'..\Pictures_saved\MTTF\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time), dpi=1200)
+    plt.savefig(r'..\Pictures_saved\Restoration_Rate\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time), dpi=1200)
     plt.show()
 
 
 if __name__ == '__main__':
-    folder_name = 'MTTF'
-    file_name = 'MTTF敏感性分析-不同优先级的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_08_07_+10_42'
-    # file_name = 'MTTF敏感性分析-不同优先级的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_08_07_+23_23'
+    folder_name = 'FaultDetectionRate'
+    file_name = 'RecoveryRate敏感性分析-不同优先级的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_08_15+08_13'
 
     x_data_Global, y_data_Global = read_data_from_excel(folder_name, file_name)
-    # draw_priority_analysis(x_data_Global, y_data_Global, 'MTTF优先级分析', 'Global策略')
+    # draw_priority_analysis(x_data_Global, y_data_Global, 'FaultDetectionRate优先级分析', 'Global策略')
 
-    file_name_2 = 'MTTF敏感性分析-不同优先级的服务可用度-Local策略,演化N=50次,100节点的拓扑_2023_08_05_+23_11'
-    # file_name_2 = 'MTTF敏感性分析-不同优先级的服务可用度-Local策略,演化N=50次,100节点的拓扑_2023_08_06_+07_46'
+    file_name_2 = 'RecoveryRate敏感性分析-不同优先级的服务可用度-Local策略,演化N=50次,100节点的拓扑_2023_08_14+22_11'
 
     x_data_Local, y_data_Local = read_data_from_excel(folder_name, file_name_2)
-    # draw_priority_analysis(x_data_Local, y_data_Local, 'MTTF优先级分析', 'Local策略')
+    # draw_priority_analysis(x_data_Local, y_data_Local, 'FaultDetectionRate优先级分析', 'Local策略')
 
-    file_resource_global = 'MTTF敏感性分析-1000_3000-不同网络规模汇总-Global策略_2023_0903'
-    file_resource_global_2 = 'MTTF敏感性分析-1000_2000-不同网络规模汇总-Global策略_2023_0903'
-    file_resource_local = 'MTTF敏感性分析-1000_3000-不同网络规模汇总-Local策略_2023_0903'
-    file_resource_local_2 = 'MTTF敏感性分析-1000_2000-不同网络规模汇总-Local策略_2023_0903'
+    file_resource_global = 'RecoveryRate敏感性分析-不同网络规模汇总-Global策略-20230814'
+    file_resource_local = 'RecoveryRate敏感性分析-不同网络规模汇总-Local策略-20230814'
 
-    x_local, y_local = read_data_from_excel( folder_name, file_resource_local_2)
-    draw_resource_plot(x_local, y_local,'MTTF资源可用性分析', 'Local策略')
 
-    x_global, y_global = read_data_from_excel(folder_name, file_resource_global_2)
-    # draw_resource_plot(x_global, y_global, 'MTTF资源可用性分析', 'Global策略')
+    x_local, y_local = read_data_from_excel( folder_name, file_resource_local)
+    # draw_resource_plot(x_local, y_local,'RecoveryRate资源可用性分析', 'Local策略')
+
+    x_global, y_global = read_data_from_excel(folder_name, file_resource_global)
+    draw_resource_plot(x_global, y_global, 'RecoveryRate资源可用性分析', 'Global策略')
+

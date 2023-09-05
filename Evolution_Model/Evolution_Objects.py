@@ -8,7 +8,7 @@
 @Desc   ：建模无线网络演化对象
 =================================================='''
 import copy
-import os.path
+import os
 
 import networkx as nx
 import numpy as np
@@ -148,6 +148,7 @@ class Network(nx.Graph): # 表示继承为nx.Graph的子类
             # 如果是从文件中导入节点坐标
             if import_file == True:
                 # sys_path = os.path.abspath('..')  # 表示当前所处文件夹上一级文件夹的绝对路径
+                path = os.getcwd()
                 Edges_info = pd.read_excel( r"..\Results_Saving\{}.xlsx".format(file_name), sheet_name=0, index_col=0)  # 读取第1个sheet的数据,不把表格的行索引读入进来
                 print('读取网络链路的数据成功')
                 ################### 这部分需要根据导入的数据格式进行完善 ###################
@@ -582,15 +583,19 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
 
 
 
-def load_AppInfoFromExcel(fileName: str) -> dict:
+def load_AppInfoFromExcel(operating_system, fileName: str) -> dict:
     """
     从磁盘导入Excel表格并读取其中的业务信息
     :param fileName: 导入文件的文件名
     :return: 业务字典
     """
     AppDict = {}
+    path = os.getcwd()
 
-    df = pd.read_excel(io='..\Results_Saving\{}.xlsx'.format(fileName))
+    if operating_system == 'Linux':
+        df = pd.read_excel()
+    else:
+        df = pd.read_excel(io='..\Results_Saving\{}.xlsx'.format(fileName))
     for i in range(len(df)):
         id = df.loc[i]['id']
 
