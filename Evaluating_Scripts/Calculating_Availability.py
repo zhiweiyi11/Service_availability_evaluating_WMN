@@ -55,14 +55,17 @@ def single_availability(App_set, T, beta, demand_threshold):
             rp_t += j
 
         for k in app_out['degradation']:
+            # print('业务的降级时长为{}'.format(k))
             perf_loss += (app_demand * demand_threshold) * k # 转换为以秒s为单位
 
 
         app_unavail = sw_t + rp_t *3600
         app_time_avail = 1 - app_unavail/(3600*T) # 在T时间间隔内的平均服务可用度
+        print('业务{}的时间可用性为{}'.format(app_id, app_time_avail))
         # 服务的性能可用度=1-(总性能损失值)/总期望的性能
         print('业务{}的修复时长为{}h,修复次数为{}次'.format(app_id, rp_t, len(app_out['repair'])))
         app_performance_avail = 1 - ((app_unavail * app_demand) + (perf_loss ))/ (3600*T*app_demand)
+        print('业务{}的性能可用性为{} '.format(app_id, app_performance_avail))
 
         Apps_time_avail[app_id] = app_time_avail #
         Apps_performance_avail[app_id] = app_performance_avail

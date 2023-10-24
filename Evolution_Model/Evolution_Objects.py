@@ -483,7 +483,7 @@ def link_capacity_allocation(G,  candidate_path, app_demand):
         if link_available_cap < app_demand:
             link = (candidate_path[i], candidate_path[i+1])
             bottleneck_link.append(link)
-            print('瓶颈链路为{},剩余带宽为{}'.format(link, link_available_cap))
+            # print('瓶颈链路为{},剩余带宽为{}'.format(link, link_available_cap))
         link_load_path.append(link_available_cap)
 
     capacity_available = min(link_load_path) # 计算业务路径上的最小带宽
@@ -583,7 +583,7 @@ def init_func(G, Coordinates, Area_size, CV_range , grid_size,  traffic_th, App_
 
 
 
-def load_AppInfoFromExcel(operating_system, fileName: str) -> dict:
+def load_AppInfoFromExcel(fileName: str) -> dict:
     """
     从磁盘导入Excel表格并读取其中的业务信息
     :param fileName: 导入文件的文件名
@@ -591,11 +591,7 @@ def load_AppInfoFromExcel(operating_system, fileName: str) -> dict:
     """
     AppDict = {}
     path = os.getcwd()
-
-    if operating_system == 'Linux':
-        df = pd.read_excel()
-    else:
-        df = pd.read_excel(io='..\Results_Saving\{}.xlsx'.format(fileName))
+    df = pd.read_excel(io='..\Results_Saving\{}.xlsx'.format(fileName))
     for i in range(len(df)):
         id = df.loc[i]['id']
 
@@ -660,29 +656,26 @@ if __name__ == '__main__':
     Coordinates = dict(zip(Coordinates_df.index, Coordinates_df.values))
 
     # TX_range = 50 # 传输范围为区域面积的1/5时能够保证网络全联通
-    transmit_prob = 0.1 # 节点的数据发送概率
+    transmit_prob_list = [0.16]
+    # transmit_prob = 0.15 # 节点的数据发送概率
     transmit_power = 1.5  # 发射功率(毫瓦)，统一单位：W
     path_loss = 2  # 单位：无
     noise = pow(10, -11)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density
     Band = 10
     bandwidth = Band * pow(10, 6)  # 带宽(Mhz)，统一单位：Hz 10* pow(10, 6) 改变网络的容量和带宽;
+    bandwidth_list = [10 * pow(10, 6),  20 * pow(10, 6)] # 10 * pow(10, 6),
     lambda_TH = 8 * pow(1, -1)  # 接收器的敏感性阈值,用于确定节点的传输范围
     # TX_range = pow((transmit_power / (bandwidth * noise * lambda_TH)), 1 / path_loss) # 传输范围为38.8
     TX_range = 30 # 为了让整网链路的平均故障率低，需要将节点的传输范围设置较小值,并且增加节点的密度保证网络的拓扑连通性
     CV_range = 30 # 节点的覆盖范围
 
     # 业务请求的参数
-    App_num = 50
+    App_num = 30
     grid_size = 5
-    traffic_th = 1 # 业务网格的流量阈值
-    Demand = 3
-    App_Demand_generation = np.random.normal(loc=Demand, scale=Demand/5, size=App_num) # 生成平均值为3，标准差为1的业务带宽请求的整体分布
-    App_Demand = [] # 确保生成的所有业务需求值为正
-    for d in App_Demand_generation:
-        if d > 0:
-            App_Demand.append(d)
-        else:
-            App_Demand.append(-d)
+    traffic_th = 0.5 # 业务网格的流量阈值
+    Demand = 2
+    Demand_list = [ 1.25] # 确保业务带宽请求的比值为2:5 就行
+
 
     App_Priority = [1,2,3,4,5] * int(App_num / 5) # 用于分析不同业务优先级对服务可用度的影响，假设各等级的业务数量相同
     ratio_str = 1 # 尽量分离和尽量重用的业务占比
@@ -692,25 +685,74 @@ if __name__ == '__main__':
 
     # 确定是否从文件导入数据
     import_topology_file = True # 不从文件中导入拓扑数据
-    file_name = 'Different_resourceAndDemand_Topology=100+App=50\\Topology_100_Band=10' # 'Topology_100_Band=10[for_priority_analysis]'
+    transmit_prob = 0.19
+    Band_list = [20]
+    Band_int = 20
+    # file_name = 'Different_link_failure\\Topo_100_transProb={}\\Topology_100_Band={}_transProb={}'.format(transmit_prob, Band_int, transmit_prob) # 'Topology_100_Band=10[for_priority_analysis]'
 
+
+    for transmit_prob in transmit_prob_list:
+        for Band_int in Band_list:
+            file_name = 'Different_link_failure\\Topo_100_transProb={}\\Topology_100_Band={}_transProb={}'.format(transmit_prob, Band_int, transmit_prob) # 'Topology_100_Band=10[for_priority_analysis]'
+            G = Network(Topology, transmit_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise,  import_topology_file, file_name)
+
+            for Demand in Demand_list:
+                App_Demand_generation = np.random.normal(loc=Demand, scale=Demand / 5, size=App_num)  # 生成平均值为3，标准差为1的业务带宽请求的整体分布
+                App_Demand = []  # 确保生成的所有业务需求值为正
+                for d in App_Demand_generation:
+                    if d > 0:
+                        App_Demand.append(d)
+                    else:
+                        App_Demand.append(-d)
+                G_deploy, Apps = init_func(G, Coordinates, Area_size, CV_range, grid_size, traffic_th, App_num, App_Demand, App_Priority,  App_Strategy)
+
+                save_AppInfo(Apps, 'App_{}_Demand={}_inTopo={}_Band={}'.format(App_num, Demand, transmit_prob, Band_int) )
+
+    '''
     ## 这是初始随机生成网络及业务对象的代码
-    G = Network(Topology, transmit_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_topology_file, file_name)
-    G, Apps = init_func(G, Coordinates, Area_size, CV_range,  grid_size, traffic_th, App_num, App_Demand, App_Priority, App_Strategy)
-    # # #
-    Edges_info = {}
-    edges_list = list(G.edges)
-    for i in range(len(edges_list)):
-        edge_info = []
-        e = edges_list[i]
-        edge_info.append(e)
-        edge_info.append(G.edges[e[0], e[1]]['dis'])
-        edge_info.append(G.edges[e[0], e[1]]['capacity'])
-        edge_info.append(G.edges[e[0], e[1]]['fail_rate'])
-        Edges_info[i] = edge_info
+    for transmit_prob in transmit_prob_list:
+        print('当前生成的网络拓扑为{}\n'.format(transmit_prob))
+        for bandwidth in bandwidth_list:
+            G = Network(Topology, transmit_prob, Coordinates, TX_range, transmit_power, bandwidth, path_loss, noise, import_topology_file, file_name)
+            Edges_info = {}
+            edges_list = list(G.edges)
+            for i in range(len(edges_list)):
+                edge_info = []
+                e = edges_list[i]
+                edge_info.append(e)
+                edge_info.append(G.edges[e[0], e[1]]['dis'])
+                edge_info.append(G.edges[e[0], e[1]]['capacity'])
+                edge_info.append(G.edges[e[0], e[1]]['fail_rate'])
+                Edges_info[i] = edge_info
+            save_GraphInfo(Edges_info, 'Topology_{}_Band={}_transProb={}'.format(Node_num, int(bandwidth/pow(10,6)), transmit_prob) )
 
-    # save_GraphInfo(Edges_info, 'Topology_{}_Band={}'.format(Node_num, Band) )
-    save_AppInfo(Apps, 'App_{}_Demand={}_inTopo={}_Band={}'.format(App_num, Demand, Node_num, Band))
+            # 生成不同网络带宽下的服务部署路径
+            for Demand in Demand_list: # 不考虑用自动生成的方法，手动单独生成;
+                App_Demand_generation = np.random.normal(loc=Demand, scale=Demand / 5, size=App_num)  # 生成平均值为3，标准差为1的业务带宽请求的整体分布
+                App_Demand = []  # 确保生成的所有业务需求值为正
+                for d in App_Demand_generation:
+                    if d > 0:
+                        App_Demand.append(d)
+                    else:
+                        App_Demand.append(-d)
+                G, Apps = init_func(G, Coordinates, Area_size, CV_range,  grid_size, traffic_th, App_num, App_Demand, App_Priority, App_Strategy)
+                save_AppInfo(Apps, 'App_{}_Demand={}_inTopo={}_Band={}'.format(App_num, Demand, transmit_prob, int(bandwidth/pow(10,6)) ))
+    '''
+    # # #
+    #         ave_link_fail = 0
+    #         num_efficient_link = 0
+    #         for e in G.edges:
+    #             link_fail = G.adj[e[0]][e[1]]['fail_rate']
+    #             ave_link_fail += link_fail
+    #             if link_fail < 0.2:
+    #                 num_efficient_link += 1
+    #             # print('链路{}的故障率为{}'.format(e, link_fail))
+    #         ave_link_fail = ave_link_fail / len(G.edges)
+    #
+    #         print('整网链路的平均故障率为{}'.format(ave_link_fail))
+    #         print('网络的链路总数为{},有效的链路数为{}'.format(len(G.edges), num_efficient_link))
+    # '''
+
     # # # Apps_load = load_AppInfoFromExcel('App_100_SINR')
     # #
     # # # # 保存网络拓扑和业务请求的数据至Excel
@@ -726,8 +768,8 @@ if __name__ == '__main__':
     Loss_parameters = [path_loss, noise]
 
     # G, Apps = init_function_from_file('Topology_150_SINR', 'Node_Coordinates_150_SINR','App_150_SINR', Network_parameters, Wireless_parameters, Loss_parameters)
-    G.draw_topo(Coordinates)
-
+    # G.draw_topo(Coordinates)
+    '''# 注释链路故障率的结果
     ave_link_fail = 0
     num_efficient_link = 0
     for e in G.edges:
@@ -740,4 +782,5 @@ if __name__ == '__main__':
 
     print('整网链路的平均故障率为{}'.format(ave_link_fail))
     print('网络的链路总数为{},有效的链路数为{}'.format(len(G.edges), num_efficient_link))
+    '''
 

@@ -44,7 +44,7 @@ def convergence_analysis(N, T, G, Apps, App_priority_list):
 	for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
 		Apps[i].SLA = app_priority[i]
 		# Apps[i].str = 'Global'
-	for n in range(10, N):
+	for n in range(10, N, 5):
 		st2_ = time.time()
 
 		# Availability_Results, Loss_Results = Apps_Availability_MC(n, calculateAvailability, G, App, MTTF, MLife, MTTR, switch_time, switch_rate, survival_time)
@@ -103,10 +103,14 @@ if __name__ == '__main__':
 	Wireless_parameters = [TX_range, transmit_power, bandwidth]
 	Loss_parameters = [path_loss, noise]
 
-	topology_file = 'Topology_100_Band=10[for_priority_analysis]'
+	# topology_file = 'Topology_100_Band=10[for_priority_analysis]'
+	topology_file_mesh = '../Results_Saving/Small_Scale_Network/topo_mesh'
+
 	coordinates_file = 'Node_Coordinates_100_Uniform[for_priority_analysis]'
-	app_file = 'App_50_Demand=2_inTopo=100[for_priority_analysis]'
-	G, Apps = init_function_from_file(topology_file, coordinates_file, app_file, Network_parameters,  Wireless_parameters, Loss_parameters)
+	# app_file = 'App_50_Demand=2_inTopo=100[for_priority_analysis]'
+	app_file_mesh = '../Results_Saving/Small_Scale_Network/App_2_mesh'
+
+	G, Apps = init_function_from_file(topology_file_mesh, coordinates_file, app_file_mesh, Network_parameters,  Wireless_parameters, Loss_parameters)
 
 	# 业务可用性评估的参数
 	T = 8760
@@ -115,17 +119,17 @@ if __name__ == '__main__':
 	## 重路由相关的参数
 	message_processing_time = 0.05 # 0.05  # 单位为秒s [毫秒量级]
 	path_calculating_time = 0.5  # 单位为秒 s [秒量级]
-	detection_rate = 0.99
+	detection_rate = 0.999
 	demand_th = 2*math.pow((1/1),1)*math.exp(-1)  # 根据App_demand中的均值来确定
 	beta_list = [0.5]  # 2类可用性指标的权重(beta越大表明 时间相关的服务可用性水平越重要)
-	App_priority_list = [1, 2, 3, 4, 5]
-	app_priority = App_priority_list * int(len(Apps) / len(App_priority_list))
-	random.shuffle(app_priority)
-	for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
-		Apps[i].SLA = app_priority[i]
+	App_priority_list = [1,  5]
+	# app_priority = App_priority_list * int(len(Apps) / len(App_priority_list))
+	# random.shuffle(app_priority)
+	# for i in range(len(Apps)):  # 将业务的优先级设置为 [1~5]
+	# 	Apps[i].SLA = app_priority[i]
 
 	# 收敛性分析的参数
-	N = 100
+	N = 500
 
 	Con_Results = convergence_analysis(N, T, G, Apps, App_priority_list)
 	# 结果保存
