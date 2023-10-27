@@ -216,7 +216,7 @@ def resource_analysis(TransProb_list):
                 # print('业务的优先级为{}'.format(Apps[app_id].SLA))
 
             sla_avail, whole_avail = Apps_Availability_MC(N, T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
-            temp_results.append(np.mean(whole_avail))
+            temp_results.append(whole_avail.apply(np.mean, axis=1).values[0])
 
         availability_different_demand_local.loc[:,trans_prob] = temp_results
     save_results(availability_different_demand_local, 'LinkFailure敏感性分析-不同资源需求的服务可用度-{}策略,演化N={}次'.format('Local', N))
@@ -242,7 +242,7 @@ def resource_analysis(TransProb_list):
                 # print('业务的优先级为{}'.format(Apps[app_id].SLA))
 
             sla_avail_glb, whole_avail_glb = Apps_Availability_MC(N, T, G, Apps, MTTF, MLife, MTTR, detection_rate, message_processing_time, path_calculating_time, beta_list, demand_th)
-            temp_results_glb.append(np.mean(whole_avail_glb))
+            temp_results_glb.append(whole_avail_glb.apply(np.mean, axis=1).values[0])
 
         availability_different_demand_global.loc[:,trans_prob] = temp_results_glb
 
@@ -382,8 +382,8 @@ if __name__ == '__main__':
     Loss_parameters = [path_loss, noise]
 
     ## 服务可用性评估相关的参数
-    N = 50
-    T = 8760
+    N = 5
+    T = 876
     message_processing_time = 0.05  # 单位为秒 s
     path_calculating_time = 5  # 单位为秒 s
     detection_rate = 0.99
@@ -395,13 +395,16 @@ if __name__ == '__main__':
     MTTR = 4
 
     # Density_list = [ 80, 90, 100, 110, 120, 130, 140, 150] # 一共8组网络规模的数据
-    TransProb_list = [0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.1,0.11,0.12,0.13,0.14,0.15,0.16,0.17,0.18,0.19,0.2] #
-
-    loc_res, glb_res = priority_analysis_2(TransProb_list, App_priority_list)
-    print('==================')
-    print('服务优先级下的可用度评估已经计算完成....\n')
-
+    TransProb_list = [0.01,0.02,0.03,0.04,0.05] #,0.06,0.07,0.08,0.09,0.1,0.11,0.12,0.13,0.14,0.15,0.16,0.17,0.18,0.19,0.2] #
     local_res, global_res = resource_analysis(TransProb_list)
+
+    print('==================')
+    print('资源敏感性的服务可用度评估已经计算完成....\n')
+
+    # loc_res, glb_res = priority_analysis_2(TransProb_list, App_priority_list)
+    # print('服务优先级下的可用度评估已经计算完成....\n')
+
+
 
     # local_res, global_res = priority_analysis(Density_list, App_priority_list)
     #

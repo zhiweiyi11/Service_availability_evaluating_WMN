@@ -100,20 +100,20 @@ if __name__ == '__main__':
     file_name = 'RecoveryRate敏感性分析-不同优先级的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_08_15+08_13'
 
     x_data_Global, y_data_Global = read_data_from_excel(folder_name, file_name)
-    # draw_priority_analysis(x_data_Global, y_data_Global, 'FaultDetectionRate优先级分析', 'Global策略')
+    draw_priority_analysis(x_data_Global, y_data_Global, 'FaultDetectionRate优先级分析', 'Global策略')
 
     file_name_2 = 'RecoveryRate敏感性分析-不同优先级的服务可用度-Local策略,演化N=50次,100节点的拓扑_2023_08_14+22_11'
 
-    x_data_Local, y_data_Local = read_data_from_excel(folder_name, file_name_2)
+    # x_data_Local, y_data_Local = read_data_from_excel(folder_name, file_name_2)
     # draw_priority_analysis(x_data_Local, y_data_Local, 'FaultDetectionRate优先级分析', 'Local策略')
 
     file_resource_global = 'RecoveryRate敏感性分析-不同网络规模汇总-Global策略-20230814'
     file_resource_local = 'RecoveryRate敏感性分析-不同网络规模汇总-Local策略-20230814'
 
 
-    x_local, y_local = read_data_from_excel( folder_name, file_resource_local)
-    # draw_resource_plot(x_local, y_local,'RecoveryRate资源可用性分析', 'Local策略')
-
-    x_global, y_global = read_data_from_excel(folder_name, file_resource_global)
-    draw_resource_plot(x_global, y_global, 'RecoveryRate资源可用性分析', 'Global策略')
+    # x_local, y_local = read_data_from_excel( folder_name, file_resource_local)
+    # # draw_resource_plot(x_local, y_local,'RecoveryRate资源可用性分析', 'Local策略')
+    #
+    # x_global, y_global = read_data_from_excel(folder_name, file_resource_global)
+    # draw_resource_plot(x_global, y_global, 'RecoveryRate资源可用性分析', 'Global策略')
 

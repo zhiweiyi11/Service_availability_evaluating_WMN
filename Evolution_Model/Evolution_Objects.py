@@ -657,7 +657,7 @@ if __name__ == '__main__':
 
     # TX_range = 50 # 传输范围为区域面积的1/5时能够保证网络全联通
     transmit_prob_list = [0.16]
-    # transmit_prob = 0.15 # 节点的数据发送概率
+    transmit_prob = 0.1 # 节点的数据发送概率
     transmit_power = 1.5  # 发射功率(毫瓦)，统一单位：W
     path_loss = 2  # 单位：无
     noise = pow(10, -11)  # 噪声的功率谱密度(毫瓦/赫兹)，统一单位：W/Hz, 参考自https://dsp.stackexchange.com/questions/13127/snr-calculation-with-noise-spectral-density

@@ -68,7 +68,9 @@ def save_AppInfo(appDict: dict, fileName: str):
 
         df.loc[i] = [id, access_str, exit_str, demand, load, fail_time, down_time, sla, path_str, strategy, outage]
 
-    saveDataFrameToExcel(df, fileName)
+    df.to_excel(r'..\Results_Saving\Different_link_failure\{}.xlsx'.format(fileName), index=False)
+
+    print('成功保存服务数据文件 \n')
 
 def save_GraphInfo(link_dict:dict, filename:str):
     # 导出网络的拓扑信息{链路：节点对，故障率，容量}
@@ -81,7 +83,10 @@ def save_GraphInfo(link_dict:dict, filename:str):
 
         df.loc[i] = [node_pair, distance,  capacity, fail_rate]
 
-    saveDataFrameToExcel(df, filename)
+    # saveDataFrameToExcel(df, filename)
+    df.to_excel(r'..\Results_Saving\Different_link_failure\{}.xlsx'.format(filename), index=False)
+
+    print('成功保存网络数据文件 \n')
 
 
 def generate_PPP_distribution(area_size,  lam, save_data):

@@ -129,9 +129,9 @@ if __name__ == '__main__':
 	Loss_parameters = [path_loss, noise]
 
 	## 服务可用性评估相关的参数
-	N = 5
+	N = 50
 	# T = 30 * 24 # 一个月
-	T = 876  # 一年时长
+	T = 8760  # 一年时长
 	message_processing_time = 0.05  # 单位为秒 50ms
 	path_calculating_time = 5  # 单位为秒 s
 	detection_rate = 0.99

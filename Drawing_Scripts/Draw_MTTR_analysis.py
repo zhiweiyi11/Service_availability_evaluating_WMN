@@ -61,7 +61,7 @@ def draw_priority_plot(x_data, y_data, analysis_param, filename):
     plt.legend(title="Priority") # loc="lower right",
     plt.subplots_adjust(left=0.15)
 
-    # plt.savefig(r'..\Pictures_saved\MTTR\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
+    plt.savefig(r'..\Pictures_saved\MTTR\{}_plot_{}time={}.jpg'.format(analysis_param, filename, time2), dpi=1200)
     plt.show()
 
 def draw_performance_plot(x_data, y_data, analysis_param, fileneme):
@@ -113,11 +113,11 @@ def draw_resource_plot(x_data, y_data, analysis_param, filename):
     ax.set_xlabel('${}$ of network nodes'.format('MTTR'), fontdict=font)
     ax.set_ylabel('Service availability', fontdict=font)
 
-    y_Locator = MultipleLocator(0.0005)  # 设置y轴刻度标签为 0.0001 的倍数
+    y_Locator = MultipleLocator(0.001)  # 设置y轴刻度标签为 0.0001 的倍数
     y_Formatter = FormatStrFormatter('%1.4f')  # 设置y轴标签文本的格式
     ax.yaxis.set_major_locator(y_Locator)
     ax.yaxis.set_major_formatter(y_Formatter)
-    plt.ylim(bottom=0.996,top=1)
+    plt.ylim(bottom=0.993,top=1)
 
     plt.legend(title="") # loc="upper right",
     plt.subplots_adjust(left=0.15)
@@ -174,8 +174,8 @@ if __name__ == '__main__':
     folder_name = 'MTTR'
     file_name = 'MTTR敏感性分析-不同优先级的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_08_05+23_09'
 
-    x_data_Global, y_data_Global = read_data_from_excel(folder_name, file_name)
-    draw_priority_plot(x_data_Global, y_data_Global,'MTTR优先级分析', ' Global策略')
+    # x_data_Global, y_data_Global = read_data_from_excel(folder_name, file_name)
+    # draw_priority_plot(x_data_Global, y_data_Global,'MTTR优先级分析', ' Global策略')
 
 
 
@@ -188,9 +188,9 @@ if __name__ == '__main__':
     # x_data_Global, y_data_Global = read_data_from_excel(folder_name, file_name_resource)
     # draw_resource_plot(x_data_Global, y_data_Global, 'MTTR网络资源可用性分析','Global策略')
 
-    # file_name_resource_2 = 'MTTR敏感性分析-不同网络规模汇总-Local策略-20230814'
-    # x_data_Local, y_data_Local = read_data_from_excel(folder_name, file_name_resource_2)
-    # draw_resource_plot(x_data_Local, y_data_Local, 'MTTR网络资源可用性分析','Local策略')
+    file_name_resource_2 = 'MTTR敏感性分析-不同网络规模汇总-Local策略-20230814'
+    x_data_Local, y_data_Local = read_data_from_excel(folder_name, file_name_resource_2)
+    draw_resource_plot(x_data_Local, y_data_Local, 'MTTR网络资源可用性分析','Local策略')
 
     # file_name_performance = 'MTTR敏感性分析-不同性能权重的服务可用度-Global策略,演化N=50次,100节点的拓扑_2023_08_12+03_05'
     # x_data_Global, y_data_Global = read_data_from_excel(folder_name, file_name_performance)
